@@ -1616,13 +1616,14 @@ function RoadmapTab() {
   const [expanded, setExpanded] = useState({});
   const [customItems, setCustomItems] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '', valueAdd: '' });
+  const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '', valueAdd: '', urgency: 2 });
   const [activeQuarter, setActiveQuarter] = useState('Q1 2026');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [subItems, setSubItems] = useState({});
   const [showSubForm, setShowSubForm] = useState({});
   const [subDraft, setSubDraft] = useState({});
   const [valueAdd, setValueAdd] = useState({}); // { itemId: string }
+  const [urgency, setUrgency] = useState({}); // { itemId: 1|2|3 }
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1704,8 +1705,8 @@ function RoadmapTab() {
     if (!newItem.name.trim() || !newItem.target) return;
     const id = 'custom-' + Date.now();
     const cost = newItem.cost ? parseFloat(newItem.cost) : null;
-    setCustomItems(prev => [...prev, { ...newItem, id, name: newItem.name.trim(), detail: newItem.detail.trim(), valueAdd: newItem.valueAdd.trim(), status: 'planned', cost }]);
-    setNewItem({ name: '', detail: '', quarter: newItem.quarter, category: newItem.category, target: '', cost: '', valueAdd: '' });
+    setCustomItems(prev => [...prev, { ...newItem, id, name: newItem.name.trim(), detail: newItem.detail.trim(), valueAdd: newItem.valueAdd.trim(), status: 'planned', cost, urgency: newItem.urgency }]);
+    setNewItem({ name: '', detail: '', quarter: newItem.quarter, category: newItem.category, target: '', cost: '', valueAdd: '', urgency: 2 });
     setShowAddForm(false);
   }
 
@@ -1821,7 +1822,26 @@ function RoadmapTab() {
               item.status === 'active' ? 'bg-amber-400' : 'bg-gray-300'
             }`} />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold mb-1" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
+              <div className="text-sm font-semibold mb-1 flex items-center gap-2" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>
+                {item.name}
+                {(() => {
+                  const u = urgency[item.id] ?? item.urgency ?? null;
+                  if (u == null) return (
+                    <select value="" onChange={e => setUrgency(prev => ({...prev, [item.id]: Number(e.target.value)}))}
+                      className="text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color:'#8899aa', fontWeight:400}}>
+                      <option value="" disabled>Urgency</option>
+                      <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
+                    </select>
+                  );
+                  const cfg = { 1: { label:'1', color:'#b5282a', bg:'#fef2f2', border:'#f5c6c6' }, 2: { label:'2', color:'#8a5c1a', bg:'#fdf8ec', border:'#e8d38a' }, 3: { label:'3', color:'#6b7a99', bg:'#f0f4f8', border:'#dde4ed' } }[u];
+                  return (
+                    <select value={u} onChange={e => setUrgency(prev => ({...prev, [item.id]: Number(e.target.value)}))}
+                      className="text-xs font-medium rounded px-1.5 py-0.5" style={{background: cfg.bg, color: cfg.color, border:'1px solid ' + cfg.border, cursor:'pointer'}}>
+                      <option value={1}>1 - Critical</option><option value={2}>2 - Important</option><option value={3}>3 - Nice to Have</option>
+                    </select>
+                  );
+                })()}
+              </div>
               <div className="flex gap-4">
                 <div className="flex-1">
                   <div className="text-xs" style={{color:'#6b7a99'}}>
@@ -2082,7 +2102,7 @@ function RoadmapTab() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-4 mb-3">
+          <div className="grid grid-cols-6 gap-4 mb-3">
             <div className="col-span-3">
               <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Description</label>
               <textarea value={newItem.detail} onChange={e => setNewItem(prev => ({...prev, detail: e.target.value}))}
@@ -2091,12 +2111,22 @@ function RoadmapTab() {
                 style={{borderColor:'#dde4ed', color: NAVY}} />
             </div>
             <div>
-              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Est. Cost (if applicable)</label>
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Est. Cost</label>
               <input type="number" min="0" step="100" value={newItem.cost}
                 onChange={e => setNewItem(prev => ({...prev, cost: e.target.value}))}
                 placeholder="$0"
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Urgency</label>
+              <select value={newItem.urgency} onChange={e => setNewItem(prev => ({...prev, urgency: Number(e.target.value)}))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{borderColor:'#dde4ed', color: NAVY}}>
+                <option value={1}>1 - Critical</option>
+                <option value={2}>2 - Important</option>
+                <option value={3}>3 - Nice to Have</option>
+              </select>
             </div>
           </div>
           <div className="mb-3">
