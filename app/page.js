@@ -1730,55 +1730,193 @@ function RoadmapTab() {
     const pptxgen = (await import('pptxgenjs')).default;
     const prs = new pptxgen();
     prs.layout = 'LAYOUT_WIDE';
-    const navy = '0f1f3d', gold = 'c9a84c', white = 'FFFFFF', green = '1a6b3a';
-    const hdr = { color: white, fill: { color: navy }, bold: true, fontSize: 9, align: 'center' };
-    const cell = { fontSize: 8, align: 'left', border: { type: 'solid', color: 'dde4ed', pt: 0.5 }, valign: 'top' };
+    const navy = '1B2A4A', white = 'FFFFFF', green = '1a6b3a', lineColor = '1B2A4A';
 
-    // Title slide
-    let slide = prs.addSlide();
-    slide.background = { color: navy };
-    slide.addText('Fjord Fish Market', { x: 0.8, y: 1.5, fontSize: 16, color: gold });
-    slide.addText('Operational Roadmap \u2014 ' + activeQuarter, { x: 0.8, y: 2.2, fontSize: 32, color: white, bold: true });
-    slide.addText('Board Update \u2014 ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), { x: 0.8, y: 3.5, fontSize: 14, color: '8899aa' });
+    // Gather ALL items for the active quarter (ignore category filter for export)
+    const allCategoryItems = {};
+    if (activeQ) {
+      activeQ.sections.forEach(section => {
+        if (!allCategoryItems[section.title]) allCategoryItems[section.title] = [];
+        section.items.forEach(item => {
+          allCategoryItems[section.title].push({ ...item, sectionTitle: section.title, isCompleted: !!completed[item.id] });
+        });
+      });
+    }
 
-    // Active items by section
-    const sections = Object.entries(activeSections);
-    for (const [title, items] of sections) {
-      slide = prs.addSlide();
-      slide.addText(title + ' \u2014 Active Initiatives', { x: 0.5, y: 0.3, fontSize: 20, bold: true, color: navy });
+    // One slide per category
+    const categories = ['Operations', 'Marketing', 'Culinary', 'People'];
+    for (const cat of categories) {
+      const items = allCategoryItems[cat] || [];
+      const slide = prs.addSlide();
+
+      // Navy header line
+      slide.addText(cat + ' Update', {
+        x: 0.4, y: 0.25, w: 12.3, h: 0.55,
+        fontSize: 22, fontFace: 'Georgia', color: navy, bold: false,
+      });
+      slide.addShape(prs.ShapeType.rect, {
+        x: 0.4, y: 0.8, w: 12.3, h: 0.03, fill: { color: navy },
+      });
+
+      // Navy footer bar
+      slide.addShape(prs.ShapeType.rect, {
+        x: 0, y: 7.0, w: 13.33, h: 0.5, fill: { color: navy },
+      });
+
+      if (items.length === 0) {
+        slide.addText('No initiatives for this quarter.', {
+          x: 0.6, y: 1.2, w: 11, fontSize: 12, color: '8899aa', italic: true,
+        });
+        continue;
+      }
+
+      // Table header
+      const hdr = { color: white, fill: { color: navy }, bold: true, fontSize: 8, align: 'center', valign: 'middle' };
+      const cell = { fontSize: 7.5, align: 'left', valign: 'top', border: { type: 'solid', color: 'D0D5DD', pt: 0.5 } };
+      const cellCenter = { ...cell, align: 'center' };
+
       const rows = [[
+        { text: 'P', options: { ...hdr, fontSize: 7 } },
         { text: 'Initiative', options: hdr },
+        { text: 'Details', options: hdr },
         { text: 'Target', options: hdr },
         { text: 'Expected', options: hdr },
-        { text: 'Timeline', options: hdr },
-        { text: 'Latest Update', options: hdr },
+        { text: 'Status', options: hdr },
+        { text: 'Latest Comment', options: hdr },
+        { text: 'Cost', options: hdr },
       ]];
+
       items.forEach(item => {
+        const p = urgency[item.id] ?? item.urgency ?? 2;
         const revised = revisedDates[item.id];
         const tl = getTimeline(item);
         const latest = (comments[item.id] || []).slice(-1)[0];
+        const subs = subItems[item.id] || [];
+        const isComplete = item.isCompleted;
+
+        // Build detail text with sub-items
+        let detailText = item.detail || '';
+        if (subs.length > 0) {
+          detailText += (detailText ? '\n' : '') + subs.map(s => (s.done ? '\u2713 ' : '\u25CB ') + s.name).join('\n');
+        }
+
+        // Status text
+        let statusText = isComplete ? '\u2713 Done' : (tl ? tl.label : '-');
+        if (isComplete && completionNotes[item.id]) {
+          statusText += '\n' + completionNotes[item.id];
+        }
+        const statusColor = isComplete ? green : (tl ? (tl.color === '#1a6b3a' ? green : tl.color === '#b5282a' ? 'b5282a' : '8a5c1a') : '999999');
+
+        const pColors = { 1: 'b5282a', 2: '8a5c1a', 3: '6b7a99' };
+
         rows.push([
-          { text: item.name, options: { ...cell, bold: true } },
-          { text: fmtTarget(item.target), options: cell },
-          { text: revised ? fmtTarget(revised) : '-', options: cell },
-          { text: tl ? tl.label : '-', options: { ...cell, color: tl ? (tl.color === '#1a6b3a' ? green : tl.color === '#b5282a' ? 'b5282a' : '8a5c1a') : '999999' } },
-          { text: latest ? latest.text : '-', options: { ...cell, fontSize: 7 } },
+          { text: 'P' + p, options: { ...cellCenter, bold: true, fontSize: 7, color: pColors[p] } },
+          { text: item.name, options: { ...cell, bold: true, color: isComplete ? green : navy } },
+          { text: detailText || '-', options: { ...cell, fontSize: 7 } },
+          { text: fmtTarget(item.target), options: cellCenter },
+          { text: revised ? fmtTarget(revised) : '-', options: cellCenter },
+          { text: statusText, options: { ...cellCenter, color: statusColor, fontSize: 7 } },
+          { text: latest ? latest.text : '-', options: { ...cell, fontSize: 6.5 } },
+          { text: item.cost ? fmt(item.cost) : '-', options: { ...cellCenter, fontSize: 7 } },
         ]);
       });
-      slide.addTable(rows, { x: 0.3, y: 0.9, w: 12.5, colW: [3.5, 1.5, 1.5, 1.5, 4.5], border: { type: 'solid', color: 'dde4ed', pt: 0.5 }, autoPage: true });
-    }
 
-    // Completed slide
-    if (completedItems.length > 0) {
-      slide = prs.addSlide();
-      slide.addText('Completed \u2014 ' + activeQuarter, { x: 0.5, y: 0.3, fontSize: 20, bold: true, color: green });
-      completedItems.forEach((item, i) => {
-        slide.addText('\u2713 ' + item.name, { x: 0.7, y: 0.9 + i * 0.4, fontSize: 11, color: green, w: 6 });
-        slide.addText(item.sectionTitle + ' \u2014 Target: ' + fmtTarget(item.target), { x: 7, y: 0.9 + i * 0.4, fontSize: 9, color: '8899aa', w: 5 });
+      slide.addTable(rows, {
+        x: 0.3, y: 1.0, w: 12.7,
+        colW: [0.4, 2.2, 3.0, 0.9, 0.9, 1.1, 3.2, 1.0],
+        border: { type: 'solid', color: 'D0D5DD', pt: 0.5 },
+        rowH: items.length > 8 ? 0.55 : 0.65,
+        autoPage: true,
+        autoPageRepeatHeader: true,
+        autoPageLineWeight: 0.5,
       });
     }
 
     await prs.writeFile({ fileName: 'Fjord_Roadmap_' + activeQuarter.replace(' ', '_') + '.pptx' });
+  }
+
+  function exportRoadmapPdf() {
+    // Gather ALL items for the active quarter (ignore category filter for export)
+    const allCategoryItems = {};
+    if (activeQ) {
+      activeQ.sections.forEach(section => {
+        if (!allCategoryItems[section.title]) allCategoryItems[section.title] = [];
+        section.items.forEach(item => {
+          allCategoryItems[section.title].push({ ...item, sectionTitle: section.title, isCompleted: !!completed[item.id] });
+        });
+      });
+    }
+
+    const categories = ['Operations', 'Marketing', 'Culinary', 'People'];
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fjord Roadmap - ${activeQuarter}</title>
+<style>
+@page { size: landscape; margin: 0.4in; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page-break { page-break-before: always; } }
+body { font-family: Georgia, serif; margin: 0; padding: 0; color: #1B2A4A; }
+.slide { padding: 20px 30px; min-height: 90vh; position: relative; }
+.slide-title { font-size: 22px; color: #1B2A4A; margin: 0 0 6px 0; font-weight: normal; }
+.title-line { height: 2px; background: #1B2A4A; margin-bottom: 16px; }
+.footer { position: fixed; bottom: 0; left: 0; right: 0; height: 30px; background: #1B2A4A; }
+table { width: 100%; border-collapse: collapse; font-size: 10px; }
+th { background: #1B2A4A; color: white; padding: 6px 8px; font-size: 9px; text-align: center; font-weight: bold; }
+td { padding: 5px 8px; border: 1px solid #D0D5DD; vertical-align: top; }
+td.center { text-align: center; }
+.p1 { color: #b5282a; font-weight: bold; } .p2 { color: #8a5c1a; font-weight: bold; } .p3 { color: #6b7a99; font-weight: bold; }
+.done { color: #1a6b3a; } .behind { color: #8a5c1a; } .late { color: #b5282a; }
+.initiative { font-weight: bold; color: #1B2A4A; }
+.initiative.completed { color: #1a6b3a; }
+.detail { font-size: 9px; color: #445566; }
+.sub { font-size: 8px; color: #6b7a99; margin-top: 2px; }
+.empty { color: #8899aa; font-style: italic; padding: 20px; }
+</style></head><body>`;
+
+    categories.forEach((cat, ci) => {
+      const items = allCategoryItems[cat] || [];
+      html += `<div class="slide${ci > 0 ? ' page-break' : ''}">`;
+      html += `<div class="slide-title">${cat} Update</div><div class="title-line"></div>`;
+
+      if (items.length === 0) {
+        html += `<div class="empty">No initiatives for this quarter.</div>`;
+      } else {
+        html += `<table><thead><tr><th style="width:3%">P</th><th style="width:18%">Initiative</th><th style="width:24%">Details</th><th style="width:8%">Target</th><th style="width:8%">Expected</th><th style="width:9%">Status</th><th style="width:22%">Latest Comment</th><th style="width:8%">Cost</th></tr></thead><tbody>`;
+        items.forEach(item => {
+          const p = urgency[item.id] ?? item.urgency ?? 2;
+          const revised = revisedDates[item.id];
+          const tl = getTimeline(item);
+          const latest = (comments[item.id] || []).slice(-1)[0];
+          const subs = subItems[item.id] || [];
+          const isComplete = item.isCompleted;
+
+          let detailHtml = (item.detail || '-').replace(/</g, '&lt;');
+          if (subs.length > 0) {
+            detailHtml += '<div class="sub">' + subs.map(s => (s.done ? '\u2713 ' : '\u25CB ') + s.name.replace(/</g, '&lt;')).join('<br>') + '</div>';
+          }
+
+          let statusText = isComplete ? '\u2713 Done' : (tl ? tl.label : '-');
+          const statusClass = isComplete ? 'done' : (tl ? (tl.color === '#b5282a' ? 'late' : tl.color === '#1a6b3a' ? 'done' : 'behind') : '');
+
+          html += `<tr>
+            <td class="center p${p}">P${p}</td>
+            <td class="initiative${isComplete ? ' completed' : ''}">${item.name.replace(/</g, '&lt;')}</td>
+            <td class="detail">${detailHtml}</td>
+            <td class="center">${fmtTarget(item.target)}</td>
+            <td class="center">${revised ? fmtTarget(revised) : '-'}</td>
+            <td class="center ${statusClass}">${statusText}</td>
+            <td class="detail">${latest ? latest.text.replace(/</g, '&lt;') : '-'}</td>
+            <td class="center">${item.cost ? fmt(item.cost) : '-'}</td>
+          </tr>`;
+        });
+        html += `</tbody></table>`;
+      }
+      html += `</div>`;
+    });
+
+    html += `<div class="footer"></div></body></html>`;
+
+    const printWin = window.open('', '_blank');
+    printWin.document.write(html);
+    printWin.document.close();
+    printWin.onload = () => { printWin.print(); };
   }
 
   function fmtTarget(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
@@ -2034,6 +2172,11 @@ function RoadmapTab() {
             className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
             style={{background: NAVY, border: '1px solid ' + GOLD_ACCENT}}>
             Export PowerPoint
+          </button>
+          <button onClick={exportRoadmapPdf}
+            className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
+            style={{background: NAVY, border: '1px solid ' + GOLD_ACCENT}}>
+            Export PDF
           </button>
           <button onClick={() => setShowAddForm(!showAddForm)}
             className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
