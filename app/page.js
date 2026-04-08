@@ -1617,6 +1617,10 @@ function RoadmapTab() {
   const [customItems, setCustomItems] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '' });
+  const [activeQuarter, setActiveQuarter] = useState('Q1 2026');
+  const [subItems, setSubItems] = useState({}); // { parentId: [{ id, name, status }] }
+  const [showSubForm, setShowSubForm] = useState({}); // { parentId: bool }
+  const [subDraft, setSubDraft] = useState({}); // { parentId: string }
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1703,6 +1707,22 @@ function RoadmapTab() {
     setShowAddForm(false);
   }
 
+  function addSubItem(parentId) {
+    const name = (subDraft[parentId] || '').trim();
+    if (!name) return;
+    const id = 'sub-' + Date.now();
+    setSubItems(prev => ({ ...prev, [parentId]: [...(prev[parentId] || []), { id, name, done: false }] }));
+    setSubDraft(prev => ({ ...prev, [parentId]: '' }));
+    setShowSubForm(prev => ({ ...prev, [parentId]: false }));
+  }
+
+  function toggleSubDone(parentId, subId) {
+    setSubItems(prev => ({
+      ...prev,
+      [parentId]: (prev[parentId] || []).map(s => s.id === subId ? { ...s, done: !s.done } : s),
+    }));
+  }
+
   function fmtTarget(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 
   // Merge custom items into roadmap data
@@ -1723,8 +1743,220 @@ function RoadmapTab() {
     });
   }, [customItems]);
 
+  // Render a single item card (reused in active and completed lists)
+  function renderItem(item, q) {
+    const tl = getTimeline(item);
+    const revised = revisedDates[item.id] || '';
+    const itemComments = comments[item.id] || [];
+    const isComplete = completed[item.id] || false;
+    const isExpanded = expanded[item.id] || false;
+    const draft = drafts[item.id] || '';
+    const isNoChange = noChange[item.id] || false;
+    const subs = subItems[item.id] || [];
+
+    return (
+      <div key={item.id} className="rounded-lg overflow-hidden" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="px-4 py-3">
+          <div className="flex items-start gap-3">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
+              isComplete ? 'bg-emerald-500' :
+              item.status === 'complete' ? 'bg-emerald-500' :
+              item.status === 'active' ? 'bg-amber-400' : 'bg-gray-300'
+            }`} />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
+              <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>
+                {item.detail}
+                {item.cost != null && item.cost > 0 && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded font-medium" style={{background:'#fdf8ec', color:'#8a5c1a', border:'1px solid #e8d38a'}}>
+                    Est. {fmt(item.cost)}
+                  </span>
+                )}
+              </div>
+              {/* Sub-initiatives */}
+              {subs.length > 0 && (
+                <div className="mt-2 ml-1 space-y-1">
+                  {subs.map(s => (
+                    <label key={s.id} className="flex items-center gap-2 text-xs cursor-pointer" style={{color: s.done ? '#8899aa' : '#445566'}}>
+                      <input type="checkbox" checked={s.done} onChange={() => toggleSubDone(item.id, s.id)} className="rounded w-3 h-3" />
+                      <span style={{textDecoration: s.done ? 'line-through' : 'none'}}>{s.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {showSubForm[item.id] ? (
+                <div className="mt-2 flex gap-2">
+                  <input value={subDraft[item.id] || ''} onChange={e => setSubDraft(prev => ({...prev, [item.id]: e.target.value}))}
+                    placeholder="Sub-initiative name..." className="flex-1 text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
+                  <button onClick={() => addSubItem(item.id)} disabled={!(subDraft[item.id] || '').trim()}
+                    className="px-2 py-1 rounded text-xs font-medium text-white disabled:opacity-40" style={{background: NAVY}}>Add</button>
+                  <button onClick={() => setShowSubForm(prev => ({...prev, [item.id]: false}))}
+                    className="px-2 py-1 rounded text-xs" style={{background:'#f0f4f8', color:'#6b7a99'}}>Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowSubForm(prev => ({...prev, [item.id]: true}))}
+                  className="mt-1 text-xs font-medium" style={{color:'#8899aa'}}>+ sub-initiative</button>
+              )}
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="text-center">
+                <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Target</div>
+                <div className="text-xs font-medium px-2 py-1 rounded" style={{background:'#f0f4f8', color: NAVY}}>
+                  {fmtTarget(item.target)}
+                </div>
+              </div>
+              {!isComplete && (
+                <div className="text-center">
+                  <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Expected</div>
+                  <input type="date" value={revised}
+                    onChange={e => setRevisedDates(prev => ({...prev, [item.id]: e.target.value}))}
+                    className="text-xs font-medium px-2 py-1 rounded border text-center w-32"
+                    style={{borderColor:'#dde4ed', color: NAVY}} />
+                </div>
+              )}
+              {tl && (
+                <div className="text-center w-20">
+                  <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Timeline</div>
+                  <span className="text-xs font-medium px-2 py-1 rounded block" style={{background: tl.bg, color: tl.color, border: '1px solid ' + tl.border}}>
+                    {tl.label}
+                  </span>
+                </div>
+              )}
+              <label className="flex flex-col items-center gap-0.5 cursor-pointer flex-shrink-0">
+                <span className="text-xs" style={{color:'#8899aa'}}>Done</span>
+                <input type="checkbox" checked={isComplete}
+                  onChange={e => setCompleted(prev => ({...prev, [item.id]: e.target.checked}))}
+                  className="w-4 h-4 rounded" />
+              </label>
+            </div>
+          </div>
+          <button onClick={() => setExpanded(prev => ({...prev, [item.id]: !isExpanded}))}
+            className="mt-2 text-xs font-medium flex items-center gap-1"
+            style={{color:'#1a6b8a'}}>
+            {isExpanded ? '\u25BC' : '\u25B6'} Commentary ({itemComments.length})
+          </button>
+        </div>
+
+        {isExpanded && (
+          <div className="px-4 pb-4" style={{borderTop:'1px solid #eef1f6'}}>
+            {itemComments.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {itemComments.map((c, ci) => {
+                  const editKey = item.id + '-' + ci;
+                  const canEdit = c.timestamp && isEditable(c.timestamp);
+                  const isEditMode = editing[editKey] !== undefined;
+                  return (
+                    <div key={ci} className="flex gap-3 text-xs py-2 items-start" style={{borderBottom:'1px solid #f0f4f8'}}>
+                      <div className="flex-shrink-0 w-20 font-medium" style={{color:'#6b7a99'}}>{c.date}</div>
+                      {c.expectedDate && (
+                        <div className="flex-shrink-0 px-2 py-0.5 rounded" style={{background:'#f0f4f8', color: NAVY}}>
+                          Exp: {fmtTarget(c.expectedDate)}
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        {isEditMode ? (
+                          <div className="flex gap-2">
+                            <textarea value={editing[editKey]} rows={2}
+                              onChange={e => setEditing(prev => ({...prev, [editKey]: e.target.value}))}
+                              className="flex-1 text-xs rounded border px-2 py-1 resize-none"
+                              style={{borderColor:'#b3d9eb', color: NAVY}} />
+                            <div className="flex flex-col gap-1">
+                              <button onClick={() => saveEdit(item.id, ci)}
+                                className="px-2 py-1 rounded text-xs font-medium text-white" style={{background:'#1a6b3a'}}>Save</button>
+                              <button onClick={() => setEditing(prev => { const n={...prev}; delete n[editKey]; return n; })}
+                                className="px-2 py-1 rounded text-xs font-medium" style={{background:'#f0f4f8', color:'#6b7a99'}}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{color: c.noChange ? '#8899aa' : '#445566', fontStyle: c.noChange ? 'italic' : 'normal'}}>
+                            {c.text}
+                          </span>
+                        )}
+                      </div>
+                      {canEdit && !isEditMode && (
+                        <button onClick={() => setEditing(prev => ({...prev, [editKey]: c.text}))}
+                          className="flex-shrink-0 text-xs px-2 py-0.5 rounded"
+                          style={{color:'#1a6b8a', background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                          Edit
+                        </button>
+                      )}
+                      {!canEdit && !isEditMode && (
+                        <span className="flex-shrink-0 text-xs" style={{color:'#ccd4e0'}} title="Locked — past Tuesday 5pm cutoff">
+                          &#128274;
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="mt-3">
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  {isNoChange ? (
+                    <div className="text-xs italic py-2 px-3 rounded" style={{background:'#f0f4f8', color:'#8899aa'}}>
+                      No change from last update
+                    </div>
+                  ) : (
+                    <textarea value={draft} rows={2} placeholder="Add an update..."
+                      onChange={e => setDrafts(prev => ({...prev, [item.id]: e.target.value}))}
+                      className="w-full text-xs rounded border px-3 py-2 resize-none"
+                      style={{borderColor:'#dde4ed', color: NAVY}} />
+                  )}
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs mt-1" style={{color:'#6b7a99'}}>
+                    <input type="checkbox" checked={isNoChange}
+                      onChange={e => setNoChange(prev => ({...prev, [item.id]: e.target.checked}))}
+                      className="rounded" />
+                    No change from last update
+                  </label>
+                </div>
+                <button onClick={() => addComment(item.id)}
+                  disabled={!revised || (!isNoChange && !draft.trim())}
+                  className="px-3 py-2 rounded text-xs font-semibold text-white disabled:opacity-40 flex-shrink-0"
+                  style={{background: NAVY}}>
+                  Post
+                </button>
+              </div>
+              {!revised && (
+                <div className="text-xs mt-1" style={{color:'#b5282a'}}>
+                  Set an expected completion date before posting.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Get active quarter data
+  const activeQ = mergedData.find(q => q.quarter === activeQuarter) || mergedData[0];
+
+  // Split items into completed and active for the selected quarter
+  const completedItems = [];
+  const activeItems = [];
+  if (activeQ) {
+    activeQ.sections.forEach(section => {
+      section.items.forEach(item => {
+        const isComplete = completed[item.id] || item.status === 'complete' && completed[item.id] !== false;
+        if (completed[item.id]) {
+          completedItems.push({ ...item, sectionTitle: section.title });
+        } else {
+          activeItems.push({ ...item, sectionTitle: section.title });
+        }
+      });
+    });
+  }
+
+  // Group active items by section
+  const activeSections = {};
+  activeItems.forEach(item => {
+    if (!activeSections[item.sectionTitle]) activeSections[item.sectionTitle] = [];
+    activeSections[item.sectionTitle].push(item);
+  });
+
   return (
-    <div className="max-w-5xl mx-auto">
+    <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{color: NAVY}}>Operational Roadmap</h1>
@@ -1799,201 +2031,70 @@ function RoadmapTab() {
         </div>
       )}
 
-      {/* Legend */}
-      <div className="flex items-center gap-6 mb-6 text-xs" style={{color:'#6b7a99'}}>
-        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Complete</div>
-        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /> In Progress</div>
-        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300" /> Planned</div>
-        <div className="ml-auto flex items-center gap-4">
-          <span className="px-2 py-0.5 rounded text-xs" style={{background:'#edfaf2', color:'#1a6b3a', border:'1px solid #9dd4b5'}}>On Track / Ahead</span>
-          <span className="px-2 py-0.5 rounded text-xs" style={{background:'#fdf8ec', color:'#8a5c1a', border:'1px solid #e8d38a'}}>Slightly Behind</span>
-          <span className="px-2 py-0.5 rounded text-xs" style={{background:'#fef2f2', color:'#b5282a', border:'1px solid #f5c6c6'}}>Behind Schedule</span>
-        </div>
+      {/* Quarter Tabs */}
+      <div className="flex gap-1 mb-6">
+        {mergedData.map(q => (
+          <button key={q.quarter} onClick={() => setActiveQuarter(q.quarter)}
+            className="px-5 py-2 rounded-lg text-xs font-semibold transition-all"
+            style={{
+              background: activeQuarter === q.quarter ? q.color : '#f0f4f8',
+              color: activeQuarter === q.quarter ? 'white' : '#6b7a99',
+              border: '1px solid ' + (activeQuarter === q.quarter ? q.color : '#dde4ed'),
+            }}>
+            {q.quarter}
+            <span className="ml-2 opacity-60">
+              ({activeQ && q.quarter === activeQuarter ? activeItems.length + ' active' : ''})
+            </span>
+          </button>
+        ))}
       </div>
 
-      {mergedData.map(q => (
-        <div key={q.quarter} className="mb-8">
-          <div className="rounded-xl overflow-hidden" style={{border: '2px solid ' + q.border}}>
-            <div className="px-5 py-4" style={{background: q.color}}>
-              <div className="text-lg font-bold text-white">{q.quarter}</div>
+      {/* Two-column layout */}
+      <div className="flex gap-6">
+        {/* Completed sidebar */}
+        <div className="w-64 flex-shrink-0">
+          <div className="rounded-xl overflow-hidden" style={{border:'1px solid #9dd4b5', background:'#edfaf2'}}>
+            <div className="px-4 py-3" style={{background:'#1a6b3a'}}>
+              <div className="text-sm font-bold text-white">Completed ({completedItems.length})</div>
             </div>
-            <div className="p-5" style={{background: q.bg}}>
-              {q.sections.map(section => (
-                <div key={section.title} className="mb-4 last:mb-0">
-                  <div className="text-sm font-bold mb-2" style={{color: NAVY}}>{section.title}</div>
-                  <div className="space-y-2">
-                    {section.items.map(item => {
-                      const tl = getTimeline(item);
-                      const revised = revisedDates[item.id] || '';
-                      const itemComments = comments[item.id] || [];
-                      const isComplete = completed[item.id] || false;
-                      const isExpanded = expanded[item.id] || false;
-                      const draft = drafts[item.id] || '';
-                      const isNoChange = noChange[item.id] || false;
-
-                      return (
-                        <div key={item.id} className="rounded-lg overflow-hidden" style={{background:'white', border:'1px solid #dde4ed', opacity: isComplete ? 0.7 : 1}}>
-                          {/* Main row */}
-                          <div className="px-4 py-3">
-                            <div className="flex items-start gap-3">
-                              <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
-                                isComplete ? 'bg-emerald-500' :
-                                item.status === 'complete' ? 'bg-emerald-500' :
-                                item.status === 'active' ? 'bg-amber-400' : 'bg-gray-300'
-                              }`} />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-semibold" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
-                                <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>
-                                  {item.detail}
-                                  {item.cost != null && item.cost > 0 && (
-                                    <span className="ml-2 px-1.5 py-0.5 rounded font-medium" style={{background:'#fdf8ec', color:'#8a5c1a', border:'1px solid #e8d38a'}}>
-                                      Est. {fmt(item.cost)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3 flex-shrink-0">
-                                <div className="text-center">
-                                  <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Target</div>
-                                  <div className="text-xs font-medium px-2 py-1 rounded" style={{background:'#f0f4f8', color: NAVY}}>
-                                    {fmtTarget(item.target)}
-                                  </div>
-                                </div>
-                                <div className="text-center">
-                                  <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Expected</div>
-                                  <input type="date" value={revised} disabled={isComplete}
-                                    onChange={e => setRevisedDates(prev => ({...prev, [item.id]: e.target.value}))}
-                                    className="text-xs font-medium px-2 py-1 rounded border text-center w-32"
-                                    style={{borderColor:'#dde4ed', color: NAVY}} />
-                                </div>
-                                {tl && (
-                                  <div className="text-center w-20">
-                                    <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Timeline</div>
-                                    <span className="text-xs font-medium px-2 py-1 rounded block" style={{background: tl.bg, color: tl.color, border: '1px solid ' + tl.border}}>
-                                      {tl.label}
-                                    </span>
-                                  </div>
-                                )}
-                                <label className="flex flex-col items-center gap-0.5 cursor-pointer flex-shrink-0">
-                                  <span className="text-xs" style={{color:'#8899aa'}}>Done</span>
-                                  <input type="checkbox" checked={isComplete}
-                                    onChange={e => setCompleted(prev => ({...prev, [item.id]: e.target.checked}))}
-                                    className="w-4 h-4 rounded" />
-                                </label>
-                              </div>
-                            </div>
-                            {/* Toggle commentary */}
-                            <button onClick={() => setExpanded(prev => ({...prev, [item.id]: !isExpanded}))}
-                              className="mt-2 text-xs font-medium flex items-center gap-1"
-                              style={{color:'#1a6b8a'}}>
-                              {isExpanded ? '\u25BC' : '\u25B6'} Commentary ({itemComments.length})
-                            </button>
-                          </div>
-
-                          {/* Commentary section */}
-                          {isExpanded && (
-                            <div className="px-4 pb-4" style={{borderTop:'1px solid #eef1f6'}}>
-                              {/* Previous comments */}
-                              {itemComments.length > 0 && (
-                                <div className="mt-3 space-y-2">
-                                  {itemComments.map((c, ci) => {
-                                    const editKey = item.id + '-' + ci;
-                                    const canEdit = c.timestamp && isEditable(c.timestamp);
-                                    const isEditMode = editing[editKey] !== undefined;
-                                    return (
-                                      <div key={ci} className="flex gap-3 text-xs py-2 items-start" style={{borderBottom:'1px solid #f0f4f8'}}>
-                                        <div className="flex-shrink-0 w-20 font-medium" style={{color:'#6b7a99'}}>{c.date}</div>
-                                        {c.expectedDate && (
-                                          <div className="flex-shrink-0 px-2 py-0.5 rounded" style={{background:'#f0f4f8', color: NAVY}}>
-                                            Exp: {fmtTarget(c.expectedDate)}
-                                          </div>
-                                        )}
-                                        <div className="flex-1">
-                                          {isEditMode ? (
-                                            <div className="flex gap-2">
-                                              <textarea value={editing[editKey]} rows={2}
-                                                onChange={e => setEditing(prev => ({...prev, [editKey]: e.target.value}))}
-                                                className="flex-1 text-xs rounded border px-2 py-1 resize-none"
-                                                style={{borderColor:'#b3d9eb', color: NAVY}} />
-                                              <div className="flex flex-col gap-1">
-                                                <button onClick={() => saveEdit(item.id, ci)}
-                                                  className="px-2 py-1 rounded text-xs font-medium text-white" style={{background:'#1a6b3a'}}>Save</button>
-                                                <button onClick={() => setEditing(prev => { const n={...prev}; delete n[editKey]; return n; })}
-                                                  className="px-2 py-1 rounded text-xs font-medium" style={{background:'#f0f4f8', color:'#6b7a99'}}>Cancel</button>
-                                              </div>
-                                            </div>
-                                          ) : (
-                                            <span style={{color: c.noChange ? '#8899aa' : '#445566', fontStyle: c.noChange ? 'italic' : 'normal'}}>
-                                              {c.text}
-                                            </span>
-                                          )}
-                                        </div>
-                                        {canEdit && !isEditMode && (
-                                          <button onClick={() => setEditing(prev => ({...prev, [editKey]: c.text}))}
-                                            className="flex-shrink-0 text-xs px-2 py-0.5 rounded"
-                                            style={{color:'#1a6b8a', background:'#edf6fb', border:'1px solid #b3d9eb'}}>
-                                            Edit
-                                          </button>
-                                        )}
-                                        {!canEdit && !isEditMode && (
-                                          <span className="flex-shrink-0 text-xs" style={{color:'#ccd4e0'}} title="Locked — past Tuesday 5pm cutoff">
-                                            &#128274;
-                                          </span>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-
-                              {/* New comment input */}
-                              <div className="mt-3">
-                                <div className="flex items-start gap-2">
-                                  <div className="flex-1">
-                                    {isNoChange ? (
-                                      <div className="text-xs italic py-2 px-3 rounded" style={{background:'#f0f4f8', color:'#8899aa'}}>
-                                        No change from last update
-                                      </div>
-                                    ) : (
-                                      <textarea value={draft} rows={2} placeholder="Add an update..."
-                                        onChange={e => setDrafts(prev => ({...prev, [item.id]: e.target.value}))}
-                                        className="w-full text-xs rounded border px-3 py-2 resize-none"
-                                        style={{borderColor:'#dde4ed', color: NAVY}} />
-                                    )}
-                                    <div className="flex items-center gap-3 mt-1">
-                                      <label className="flex items-center gap-1.5 cursor-pointer text-xs" style={{color:'#6b7a99'}}>
-                                        <input type="checkbox" checked={isNoChange}
-                                          onChange={e => setNoChange(prev => ({...prev, [item.id]: e.target.checked}))}
-                                          className="rounded" />
-                                        No change from last update
-                                      </label>
-                                    </div>
-                                  </div>
-                                  <button onClick={() => addComment(item.id)}
-                                    disabled={!revised || (!isNoChange && !draft.trim())}
-                                    className="px-3 py-2 rounded text-xs font-semibold text-white disabled:opacity-40 flex-shrink-0"
-                                    style={{background: NAVY}}>
-                                    Post
-                                  </button>
-                                </div>
-                                {!revised && (
-                                  <div className="text-xs mt-1" style={{color:'#b5282a'}}>
-                                    Set an expected completion date before posting.
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+            <div className="p-3 space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+              {completedItems.length === 0 && (
+                <div className="text-xs text-center py-4" style={{color:'#8899aa'}}>No completed items yet</div>
+              )}
+              {completedItems.map(item => (
+                <div key={item.id} className="rounded-lg px-3 py-2" style={{background:'white', border:'1px solid #dde4ed'}}>
+                  <div className="flex items-start gap-2">
+                    <input type="checkbox" checked={true}
+                      onChange={() => setCompleted(prev => ({...prev, [item.id]: false}))}
+                      className="w-3 h-3 rounded mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="text-xs font-medium line-through" style={{color:'#6b7a99'}}>{item.name}</div>
+                      <div className="text-xs" style={{color:'#8899aa'}}>{item.sectionTitle} &middot; {fmtTarget(item.target)}</div>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      ))}
+
+        {/* Active items */}
+        <div className="flex-1">
+          {Object.entries(activeSections).map(([sectionTitle, items]) => (
+            <div key={sectionTitle} className="mb-5">
+              <div className="text-sm font-bold mb-2" style={{color: NAVY}}>{sectionTitle}</div>
+              <div className="space-y-2">
+                {items.map(item => renderItem(item, activeQ))}
+              </div>
+            </div>
+          ))}
+          {Object.keys(activeSections).length === 0 && (
+            <div className="text-center py-12 rounded-xl" style={{background:'white', border:'1px solid #dde4ed', color:'#8899aa'}}>
+              All items completed for {activeQuarter}!
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
