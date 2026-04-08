@@ -88,32 +88,22 @@ function buildLedger(sales) {
     annualizedMap[d] = daysInWindow > 0 ? (rollingSum / daysInWindow) * 365 : 0;
   }
 
-  // Trailing 90-day growth rate vs same 90 days prior year
-  const TRAIL_DAYS = 90;
-  const trailingGrowthMap = {};
-  for (let i = 0; i < sortedDates.length; i++) {
-    const d = sortedDates[i];
-    const endDate = new Date(d);
-    const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - TRAIL_DAYS + 1);
+  // Monthly YoY growth: compare each calendar month to same month prior year
+  const monthlyRevenue = {};
+  for (const d of sortedDates) {
+    const dt = new Date(d);
+    const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    monthlyRevenue[key] = (monthlyRevenue[key] || 0) + posMap[d];
+  }
 
-    let currentSum = 0, priorSum = 0, hasPrior = false;
-    for (let j = Math.max(0, i - TRAIL_DAYS + 1); j <= i; j++) {
-      const dd = sortedDates[j];
-      if (new Date(dd) < startDate) continue;
-      currentSum += posMap[dd];
-      // Find same day prior year
-      const priorDate = new Date(dd);
-      priorDate.setFullYear(priorDate.getFullYear() - 1);
-      const priorKey = priorDate.toISOString().split('T')[0];
-      if (posMap[priorKey]) {
-        priorSum += posMap[priorKey];
-        hasPrior = true;
-      }
-    }
-    trailingGrowthMap[d] = hasPrior && priorSum > 0
-      ? (currentSum - priorSum) / priorSum
-      : 0;
+  const monthlyGrowthMap = {};
+  for (const d of sortedDates) {
+    const dt = new Date(d);
+    const curKey = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    const priorKey = (dt.getFullYear() - 1) + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    const curRev = monthlyRevenue[curKey] || 0;
+    const priorRev = monthlyRevenue[priorKey] || 0;
+    monthlyGrowthMap[d] = priorRev > 0 ? (curRev - priorRev) / priorRev : 0;
   }
 
   return sortedDates.map(d => {
@@ -121,7 +111,7 @@ function buildLedger(sales) {
     const ed = new Date(d);
     const pd = addDays(ed, LAG);
     const annualized = annualizedMap[d] || 0;
-    const trailingGrowth = trailingGrowthMap[d] || 0;
+    const trailingGrowth = monthlyGrowthMap[d] || 0;
 
     const baseShare = calcTieredShare(annualized, g);
     const growthBonus = calcGrowthBonusFromRate(g, trailingGrowth);
@@ -769,8 +759,8 @@ function IncomeCalculator() {
         <div className="text-xs leading-relaxed" style={{color:'#8899aa'}}>
           <strong style={{color:'#6b7a99'}}>Important:</strong> These figures are estimates based on current store performance data and the assumptions you&apos;ve entered.
           Actual income will vary based on your store&apos;s performance, your cost management, local market conditions, and seasonal fluctuations.
-          Revenue share percentages are based on annualized store revenue. Growth bonuses are calculated on a trailing 90-day basis
-          and require sustained year-over-year improvement. You are responsible for all business expenses including COGS, payroll,
+          Revenue share percentages are based on annualized store revenue. Growth bonuses are calculated monthly by comparing
+          each calendar month to the same month in the prior year. You are responsible for all business expenses including COGS, payroll,
           payroll taxes, and any other costs associated with running your LLC.
         </div>
       </div>
@@ -934,7 +924,7 @@ export default function Dashboard() {
               {[
                 ['Base tiers', '62/55/49/43%'],
                 ['Growth bonus', 'Tiered > 5% YoY'],
-                ['Trailing growth', (currentGrowth > 0 ? '+' : '') + pct(currentGrowth)],
+                ['Monthly YoY', (currentGrowth > 0 ? '+' : '') + pct(currentGrowth)],
                 ['Eff. rate (30d)', pct(avgEffRate)],
                 ['Payment lag', '21 days'],
                 ['COGS (operator)', '~20%'],
@@ -1063,7 +1053,7 @@ export default function Dashboard() {
                   {[
                     ['Owner-Operator', 'An independent business owner (LLC) who runs a sushi concession inside a Fjord location. Expected to work 50+ hours/week in-store.'],
                     ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a 4-tier structure (62% / 55% / 49% / 43%) with breakpoints at $300k, $500k, and $700k annualized revenue.'],
-                    ['Growth Accelerator', 'A tiered bonus on incremental revenue above 5% YoY growth: 10% on 5-15% growth, 18% on 15-25% growth, 25% on 25%+ growth. Rewards aggressive growth disproportionately.'],
+                    ['Growth Accelerator', 'A tiered bonus on incremental revenue when monthly YoY growth exceeds 5%: 10% on 5-15% growth, 18% on 15-25% growth, 25% on 25%+ growth. Calculated by comparing each calendar month to the same month prior year.'],
                     ['COGS (Cost of Goods Sold)', 'Ingredients, packaging, and supplies. Estimated at 20% of revenue. Paid by the operator from their revenue share.'],
                     ['Payroll', 'Wages for any additional staff the operator hires, plus ~25% burden (FICA, SUTA/FUTA, workers comp). Paid by the operator from their share.'],
                     ['21-Day Float', 'The lag between when a sale occurs and when the operator receives their payout. Fjord holds funds for 21 days after credit card settlement.'],
@@ -1276,7 +1266,7 @@ export default function Dashboard() {
                             {[
                               ['POS Revenue',  fmtD(r.g),          '#445566',  'POS'],
                               ['Base Share',   fmtD(r.baseShare),  '#1a6b8a',  pct(r.effectiveRate) + ' eff.'],
-                              ['Growth Bonus', r.growthBonus > 0 ? '+' + fmtD(r.growthBonus) : '-', r.growthBonus > 0 ? '#1a6b3a' : '#8899aa', pct(r.trailingGrowth) + ' trailing YoY'],
+                              ['Growth Bonus', r.growthBonus > 0 ? '+' + fmtD(r.growthBonus) : '-', r.growthBonus > 0 ? '#1a6b3a' : '#8899aa', pct(r.trailingGrowth) + ' monthly YoY'],
                               ['Your Payout',  fmt(r.payout),      '#1a6b3a',  'ACH deposit'],
                             ].map(([label,val,color,source]) => (
                               <div key={label} className="rounded-lg p-3" style={{background:'white', border:'1px solid #dde4ed'}}>
@@ -1354,6 +1344,36 @@ export default function Dashboard() {
                   We provide the location, the foot traffic, the brand, and the platform. You bring the craft,
                   the hustle, and the ownership mentality. The more you grow the business, the more you earn.
                 </p>
+              </div>
+
+              {/* Why Fjord */}
+              <div className="rounded-xl p-6 mb-6" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+                <h2 className="text-lg font-bold mb-4 text-white">Why Fjord Fish Market?</h2>
+                <p className="text-sm leading-relaxed mb-5" style={{color:'rgba(255,255,255,0.7)'}}>
+                  Fjord isn&apos;t a grocery store with a sushi counter &mdash; it&apos;s a premium seafood marketplace where customers
+                  come specifically for quality. That distinction matters for your business.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    ['Premium Customer Base',
+                      'Our locations are in some of the highest-income communities in the Northeast &mdash; Darien, New Canaan, Cos Cob, Westport, and Larchmont. These customers expect quality and are willing to pay for it. Your average ticket is higher here than at any conventional grocery sushi counter.'],
+                    ['Built-In Foot Traffic',
+                      'Fjord is a destination. Customers drive past other stores to shop here. You inherit that traffic from day one &mdash; no need to build an audience from scratch or spend money on marketing.'],
+                    ['Reputation for Quality',
+                      'Fjord has spent years building a reputation for the freshest seafood in the market. Your sushi concession benefits from that halo. When customers trust the fish counter, they trust the sushi counter.'],
+                    ['Premium Sourcing Network',
+                      'As part of the Fjord ecosystem, you have access to our seafood sourcing relationships. The same fish buyers who stock our retail cases can help you access top-quality product at competitive wholesale pricing.'],
+                    ['No Competition for Attention',
+                      'Unlike a supermarket where sushi is an afterthought next to the deli, at Fjord your counter is a centerpiece. Customers walk in looking for seafood &mdash; sushi is a natural extension of why they&apos;re here.'],
+                    ['Growing Brand, Growing Locations',
+                      'Fjord is expanding. As we open new locations, successful operators get first consideration for additional stores. Build a track record at one location and grow with us.'],
+                  ].map(([title, desc]) => (
+                    <div key={title} className="rounded-lg p-4" style={{background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.12)'}}>
+                      <div className="text-sm font-bold mb-1" style={{color: GOLD_ACCENT}}>{title}</div>
+                      <div className="text-xs leading-relaxed" style={{color:'rgba(255,255,255,0.6)'}}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* What You Get */}
