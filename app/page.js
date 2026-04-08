@@ -1169,15 +1169,149 @@ function ModelComparison({ storeSales }) {
         </div>
       </div>
 
+      {/* Multi-Year Projection */}
+      {(() => {
+        const YEARS = 5;
+        const curGrowthDefault = -3; // assume current model continues declining
+        const projections = [];
+
+        for (let yr = 0; yr <= YEARS; yr++) {
+          let curRev = 0, curFjord = 0, propRev = 0, propFjord = 0, propOpTH = 0;
+
+          analysis.forEach(a => {
+            // Current model: apply actual YoY rate going forward (decline scenario)
+            const curYrRev = a.actualRevenue * Math.pow(1 + a.actualGrowth, yr);
+            const curCosts = calcCurrentCosts(a.storeKey, curYrRev, concCogsRate / 100, convertTemps);
+            curRev += curYrRev;
+            curFjord += curCosts.fjord;
+
+            // Proposed model: apply per-store growth rate
+            const propGRate = (storeGrowth[a.storeKey] || 0) / 100;
+            const propYrRev = a.prior12 * Math.pow(1 + propGRate, yr + 1);
+            const propPayout = calcProposedPayout(propYrRev);
+            let bonus = 0;
+            if (propGRate > GROWTH_ACCEL_TIERS[0].above) {
+              for (const t of GROWTH_ACCEL_TIERS) {
+                if (propGRate <= t.above) continue;
+                bonus += propYrRev * (Math.min(propGRate, t.upTo) - t.above) * t.pct;
+              }
+            }
+            const totalPayout = propPayout + bonus;
+            const propOp = calcProposedOperatorCosts(a.storeKey, propYrRev, opCogsRate / 100);
+            propRev += propYrRev;
+            propFjord += propYrRev - totalPayout;
+            propOpTH += totalPayout - propOp.cogs - propOp.payroll;
+          });
+
+          const label = yr === 0 ? 'Year 1 (Now)' : 'Year ' + (yr + 1);
+          projections.push({ yr, label, curRev, curFjord, propRev, propFjord, propOpTH, delta: propFjord - curFjord });
+        }
+
+        // Cumulative
+        let cumCur = 0, cumProp = 0;
+        projections.forEach(p => { cumCur += p.curFjord; cumProp += p.propFjord; });
+
+        return (
+          <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+            <div className="px-5 py-4" style={{background: NAVY, borderBottom:'2px solid ' + GOLD_ACCENT}}>
+              <div className="text-sm font-bold text-white">Multi-Year Projection</div>
+              <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>
+                Current model assumes each store continues at its actual YoY rate. Proposed model uses the growth rates set above.
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
+                    <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}></th>
+                    {projections.map(p => (
+                      <th key={p.yr} className="text-center px-4 py-3 font-semibold uppercase tracking-wide" style={{color: NAVY}}>{p.label}</th>
+                    ))}
+                    <th className="text-center px-4 py-3 font-semibold uppercase tracking-wide" style={{color: NAVY, background:'#f0f4f8', borderLeft:'2px solid #dde4ed'}}>
+                      {YEARS + 1}-Yr Cumulative
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{borderBottom:'1px solid #eef1f6'}}>
+                    <td className="px-4 py-3 font-semibold" style={{color:'#6b7a99'}}>Current Revenue</td>
+                    {projections.map(p => (
+                      <td key={p.yr} className="px-4 py-3 text-center" style={{color:'#445566'}}>{fmt(p.curRev)}</td>
+                    ))}
+                    <td className="px-4 py-3 text-center font-bold" style={{color:'#445566', background:'#f0f4f8', borderLeft:'2px solid #dde4ed'}}>
+                      {fmt(projections.reduce((s,p) => s+p.curRev, 0))}
+                    </td>
+                  </tr>
+                  <tr style={{borderBottom:'1px solid #eef1f6', background:'rgba(237,246,251,0.3)'}}>
+                    <td className="px-4 py-3 font-semibold" style={{color:'#1a6b8a'}}>Current Fjord Net</td>
+                    {projections.map(p => (
+                      <td key={p.yr} className="px-4 py-3 text-center font-semibold" style={{color:'#1a6b8a'}}>{fmt(p.curFjord)}</td>
+                    ))}
+                    <td className="px-4 py-3 text-center font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #dde4ed'}}>
+                      {fmt(cumCur)}
+                    </td>
+                  </tr>
+                  <tr style={{borderBottom:'1px solid #eef1f6'}}>
+                    <td className="px-4 py-3 font-semibold" style={{color:'#6b7a99'}}>Proposed Revenue</td>
+                    {projections.map(p => (
+                      <td key={p.yr} className="px-4 py-3 text-center" style={{color:'#445566'}}>{fmt(p.propRev)}</td>
+                    ))}
+                    <td className="px-4 py-3 text-center font-bold" style={{color:'#445566', background:'#f0f4f8', borderLeft:'2px solid #dde4ed'}}>
+                      {fmt(projections.reduce((s,p) => s+p.propRev, 0))}
+                    </td>
+                  </tr>
+                  <tr style={{borderBottom:'1px solid #eef1f6', background:'rgba(253,248,236,0.3)'}}>
+                    <td className="px-4 py-3 font-semibold" style={{color: GOLD_ACCENT}}>Proposed Fjord Net</td>
+                    {projections.map(p => (
+                      <td key={p.yr} className="px-4 py-3 text-center font-semibold" style={{color: GOLD_ACCENT}}>{fmt(p.propFjord)}</td>
+                    ))}
+                    <td className="px-4 py-3 text-center font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #dde4ed'}}>
+                      {fmt(cumProp)}
+                    </td>
+                  </tr>
+                  <tr style={{borderBottom:'1px solid #eef1f6', background:'rgba(237,250,242,0.3)'}}>
+                    <td className="px-4 py-3 font-semibold" style={{color:'#1a6b3a'}}>Avg Op Take-Home</td>
+                    {projections.map(p => (
+                      <td key={p.yr} className="px-4 py-3 text-center" style={{color:'#1a6b3a'}}>{fmt(p.propOpTH / 6)}</td>
+                    ))}
+                    <td className="px-4 py-3 text-center" style={{color:'#8899aa', background:'#f0f4f8', borderLeft:'2px solid #dde4ed'}}>per store avg</td>
+                  </tr>
+                  <tr style={{background:'#f0f4f8', borderTop:'2px solid ' + NAVY}}>
+                    <td className="px-4 py-3 font-bold" style={{color: NAVY}}>Annual Delta</td>
+                    {projections.map(p => {
+                      const c = p.delta >= 0 ? '#1a6b3a' : '#b5282a';
+                      return <td key={p.yr} className="px-4 py-3 text-center font-bold" style={{color:c}}>{p.delta >= 0 ? '+' : ''}{fmt(p.delta)}</td>;
+                    })}
+                    <td className="px-4 py-3 text-center font-bold" style={{
+                      color: cumProp - cumCur >= 0 ? '#1a6b3a' : '#b5282a',
+                      background: cumProp - cumCur >= 0 ? 'rgba(237,250,242,0.6)' : 'rgba(254,242,242,0.6)',
+                      borderLeft:'2px solid #dde4ed'
+                    }}>
+                      {cumProp - cumCur >= 0 ? '+' : ''}{fmt(cumProp - cumCur)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="px-5 py-3 text-xs" style={{color:'#8899aa', borderTop:'1px solid #eef1f6'}}>
+              Current model projects each store at its actual trailing YoY rate (declining stores continue to decline).
+              Proposed model projects at the per-store growth rates set in the controls above.
+              Labor costs assumed flat (no inflation). Avg Op Take-Home is the mean across all 6 stores.
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Key Insight */}
       <div className="rounded-xl p-5" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
         <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{color:'#6b7a99'}}>What This Means</div>
         <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>
-          The <strong style={{color: NAVY}}>Current Model</strong> column shows what Fjord nets today under the existing mix of concessions, employees, and temps.
+          The <strong style={{color: NAVY}}>Current Model</strong> shows what Fjord nets under the existing mix of concessions, employees, and temps.
           The <strong style={{color: GOLD_ACCENT}}>Proposed Model</strong> shows what Fjord would net under the owner-operator revenue share.
-          Positive delta means the proposed model is better for Fjord; negative means it costs more.
-          The trade-off: Fjord gives up some margin but eliminates all direct labor management, temp coordination, employment liability, and COGS procurement for in-house stores.
-          Adjust the growth sliders to see how different performance scenarios affect the comparison.
+          The multi-year projection assumes current model stores continue at their actual YoY trajectory (declining stores keep declining)
+          while proposed model stores grow at the rates set above. Over time, the gap narrows or reverses as owner-operators
+          drive growth that wouldn&apos;t happen under the current model. The trade-off in year one is an investment in a model
+          that compounds over time.
         </div>
       </div>
     </div>
