@@ -1645,7 +1645,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['compare','Model Comparison'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History']].map(([id,label]) => (
+        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['compare','Model Comparison'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -1657,7 +1657,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {!['modeler','overview','recruit','income','compare'].includes(tab) && (
+        {!['modeler','overview','recruit','income','compare','roadmap'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -2176,6 +2176,132 @@ export default function Dashboard() {
           {/* INCOME CALCULATOR */}
           {tab === 'income' && (
             <IncomeCalculator />
+          )}
+
+          {/* ROADMAP */}
+          {tab === 'roadmap' && (
+            <div className="max-w-5xl mx-auto">
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold" style={{color: NAVY}}>Operational Roadmap</h1>
+                <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Quarterly initiatives across Culinary, People, Operations, and Marketing</p>
+              </div>
+
+              {[
+                { quarter: 'Q1 2026', color: '#1a6b8a', bg: '#edf6fb', border: '#b3d9eb', sections: [
+                  { title: 'Culinary', items: [
+                    { name: 'Kitchen Training', status: 'complete', detail: 'Completed Feb 2026. On-site training in every market. Focus on food safety, equipment upgrades and recipe adherence. Big basement overhauls complete in Cos Cob and New Canaan.' },
+                    { name: 'RTC Creation', status: 'active', detail: 'Began March 2026. Purpose: case elevation, expanded RTC options and waste avenue. 5 recipes implemented by March 2026. Continue recipe creation and new recipes, training through Q2.' },
+                    { name: 'Platter Finalization', status: 'active', detail: 'March 17th tasting/costing. New platters focusing on masstige, caviar, kits, make your own and breakfast boards.' },
+                    { name: 'Kitchen Menu Costing Review', status: 'active', detail: 'Ongoing P3 and launch P4. Protein review and tasting 3/10.' },
+                    { name: 'Craftable Implementation', status: 'active', detail: 'Ongoing in implementation stage. Invoices, inventory, commissary ordering and batch recipes all set up by P3. Recipes and theoretical: P3 focus and completion.' },
+                  ]},
+                  { title: 'People', items: [
+                    { name: 'Manager Alignment', status: 'complete', detail: 'Stronger leadership in Darien \u2014 complete 2/9. Efficacy of Cos Cob management focus.' },
+                    { name: 'New Cash Handling/Tip Protocol', status: 'complete', detail: 'Launched new cash handling procedures (est. savings $10k/year). Launched new tip protocol to improve compliance regulation starting 3/9/26.' },
+                    { name: 'Training', status: 'active', detail: 'SL Program creation complete P3, launch Q2 (test NC and CC). SOP creation: fish sheets, cash handling, progressive discipline forms, weekly inventory, culture of yes, forecasting and scheduling all created Q1. New systems: Craftable, 7 Shifts training created by end of P3. GM meeting ongoing quarterly (first one Jan 27). Fish sheets roll out. Fish specs created.' },
+                  ]},
+                  { title: 'Operations', items: [
+                    { name: 'Scorecard Roll Out', status: 'complete', detail: 'Complete P2 and ongoing weekly.' },
+                    { name: 'Weekly Labor', status: 'complete', detail: 'Complete P1 and ongoing weekly.' },
+                    { name: 'Forecasting & Scheduling (7 Shifts)', status: 'complete', detail: 'Complete P2 and ongoing.' },
+                    { name: 'Introduce EZ Cater', status: 'active', detail: 'Introduced P2, low sales thus far.' },
+                    { name: 'RM Projects', status: 'active', detail: 'Brooklyn floors scheduled end of P3. Brooklyn electric complete P3W2. NC floors currently in bidding.' },
+                  ]},
+                  { title: 'Marketing', items: [
+                    { name: 'New Jar Labels', status: 'active', detail: 'Waiting on new proofs P3.' },
+                  ]},
+                ]},
+                { quarter: 'Q2 2026', color: GOLD_ACCENT, bg: '#fdf8ec', border: '#e8d38a', sections: [
+                  { title: 'Culinary', items: [
+                    { name: 'Grocery Program Roll Out', status: 'planned', detail: 'P6 2026. One main vendor for all markets with culinary input. 10 local SKUs and definition of local program.' },
+                    { name: 'Seasonal Menu Items Rejigger', status: 'planned', detail: 'Focus on sides, sauces, and salads. P5 2026.' },
+                    { name: 'Focus on Tin Fish', status: 'planned', detail: 'P5 2026. Media partner, sampling in market, weekly focus.' },
+                    { name: 'Platter/Event Execution', status: 'planned', detail: 'P4 2026.' },
+                    { name: 'Craftable Roll Out in All Markets', status: 'planned', detail: 'P4 2026.' },
+                    { name: 'Replace Broadliner', status: 'planned', detail: 'P5 2026.' },
+                    { name: 'Lobster Roll Focus', status: 'planned', detail: 'P5 2026.' },
+                    { name: 'Caviar Add-On Introduction', status: 'planned', detail: 'P4 2026.' },
+                    { name: 'Sushi Innovation', status: 'planned', detail: 'P4 2026.' },
+                    { name: 'Food Safety Certification', status: 'planned', detail: 'For every manager/line cook. P4 2026.' },
+                  ]},
+                  { title: 'HR', items: [
+                    { name: 'New Orientation Set Up', status: 'planned', detail: 'Bringing back an in-person touch. Beef up to lead to blanket. P4 2026.' },
+                    { name: 'Handbook Review', status: 'planned', detail: 'P4 2026.' },
+                    { name: 'Finalize Brooklyn 401k Plan', status: 'planned', detail: 'Company wide consideration. P6 2026.' },
+                    { name: 'Training Programs', status: 'planned', detail: 'MIT program P5 2026. Fish specs roll out P4. Opus implementation P5. Q2 GM meeting P4.' },
+                  ]},
+                  { title: 'Operations', items: [
+                    { name: 'Craftable Roll Out', status: 'planned', detail: 'P4 2026.' },
+                    { name: 'Checklist Overhaul', status: 'planned', detail: 'P5 2026. Better purpose, training tie-in.' },
+                    { name: 'Walkthrough Introduction', status: 'planned', detail: 'P6 2026. Introduce standards.' },
+                    { name: 'Cleaning Checklist Introduction', status: 'planned', detail: 'P6 2026. Implemented in all markets.' },
+                    { name: 'Scorecard 2.0 Based on Forecast', status: 'planned', detail: 'P5 2026.' },
+                    { name: 'Renegotiate UberEats', status: 'planned', detail: 'Shop exclusivity. P4 2026.' },
+                    { name: 'RM Projects', status: 'planned', detail: 'Brooklyn dining P4 2026. New Canaan sushi revamp P4 2026.' },
+                  ]},
+                  { title: 'Marketing', items: [
+                    { name: 'Social Revamp', status: 'planned', detail: 'P4 2026. Increase engagement, follower count and sales.' },
+                    { name: 'Signage Package Overhaul', status: 'planned', detail: 'Revamp NE verbiage and create meaningful POP material and program.' },
+                    { name: 'RTC and New Platter Focus', status: 'planned', detail: 'Ongoing through Q2.' },
+                  ]},
+                ]},
+                { quarter: 'Q3 2026', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5', sections: [
+                  { title: 'Culinary', items: [
+                    { name: 'Take Out Execution', status: 'planned', detail: 'Improve take-out operations and packaging.' },
+                    { name: 'Food Cost & Sales Optimization', status: 'planned', detail: 'Deep focus on food cost management and sales optimization.' },
+                    { name: 'Line Check Introduction', status: 'planned', detail: 'Implement line check procedures across all markets.' },
+                  ]},
+                  { title: 'HR', items: [
+                    { name: 'Identify New Payroll Provider', status: 'planned', detail: 'Evaluate and select replacement payroll system.' },
+                    { name: 'Roll Out Core Competencies for GMs', status: 'planned', detail: 'Define and implement GM competency framework.' },
+                    { name: 'Yearly Performance Appraisal', status: 'planned', detail: 'Annual review cycle.' },
+                    { name: 'Compensation Increase Program', status: 'planned', detail: 'Structured merit increase program.' },
+                    { name: 'Solidify Bonus Program for 2027', status: 'planned', detail: 'Finalize incentive structure for next year.' },
+                  ]},
+                  { title: 'Operations', items: [
+                    { name: 'Secret Shopper Evaluation', status: 'planned', detail: 'Implement mystery shopper program for quality assurance.' },
+                  ]},
+                ]},
+              ].map(q => (
+                <div key={q.quarter} className="mb-8">
+                  <div className="rounded-xl overflow-hidden" style={{border: '2px solid ' + q.border}}>
+                    <div className="px-5 py-4" style={{background: q.color}}>
+                      <div className="text-lg font-bold text-white">{q.quarter}</div>
+                    </div>
+                    <div className="p-5" style={{background: q.bg}}>
+                      <div className="grid grid-cols-1 gap-4">
+                        {q.sections.map(section => (
+                          <div key={section.title}>
+                            <div className="text-sm font-bold mb-2" style={{color: NAVY}}>{section.title}</div>
+                            <div className="grid grid-cols-1 gap-2">
+                              {section.items.map(item => (
+                                <div key={item.name} className="rounded-lg px-4 py-3 flex items-start gap-3" style={{background:'white', border:'1px solid #dde4ed'}}>
+                                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
+                                    item.status === 'complete' ? 'bg-emerald-500' :
+                                    item.status === 'active' ? 'bg-amber-400' : 'bg-gray-300'
+                                  }`} />
+                                  <div>
+                                    <div className="text-sm font-semibold" style={{color: NAVY}}>{item.name}</div>
+                                    <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>{item.detail}</div>
+                                  </div>
+                                  <span className="ml-auto text-xs font-medium flex-shrink-0 px-2 py-0.5 rounded" style={{
+                                    background: item.status === 'complete' ? '#edfaf2' : item.status === 'active' ? '#fdf8ec' : '#f0f4f8',
+                                    color: item.status === 'complete' ? '#1a6b3a' : item.status === 'active' ? '#8a5c1a' : '#6b7a99',
+                                    border: '1px solid ' + (item.status === 'complete' ? '#9dd4b5' : item.status === 'active' ? '#e8d38a' : '#dde4ed'),
+                                  }}>
+                                    {item.status === 'complete' ? 'Complete' : item.status === 'active' ? 'In Progress' : 'Planned'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
         </main>
