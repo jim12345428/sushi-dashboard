@@ -1616,7 +1616,7 @@ function RoadmapTab() {
   const [expanded, setExpanded] = useState({});
   const [customItems, setCustomItems] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '' });
+  const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '' });
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1697,8 +1697,9 @@ function RoadmapTab() {
   function addInitiative() {
     if (!newItem.name.trim() || !newItem.target) return;
     const id = 'custom-' + Date.now();
-    setCustomItems(prev => [...prev, { ...newItem, id, name: newItem.name.trim(), detail: newItem.detail.trim(), status: 'planned' }]);
-    setNewItem({ name: '', detail: '', quarter: newItem.quarter, category: newItem.category, target: '' });
+    const cost = newItem.cost ? parseFloat(newItem.cost) : null;
+    setCustomItems(prev => [...prev, { ...newItem, id, name: newItem.name.trim(), detail: newItem.detail.trim(), status: 'planned', cost }]);
+    setNewItem({ name: '', detail: '', quarter: newItem.quarter, category: newItem.category, target: '', cost: '' });
     setShowAddForm(false);
   }
 
@@ -1773,12 +1774,22 @@ function RoadmapTab() {
               </select>
             </div>
           </div>
-          <div className="mb-3">
-            <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Description</label>
-            <textarea value={newItem.detail} onChange={e => setNewItem(prev => ({...prev, detail: e.target.value}))}
-              rows={2} placeholder="Brief description of the initiative..."
-              className="w-full rounded-lg border px-3 py-2 text-sm resize-none"
-              style={{borderColor:'#dde4ed', color: NAVY}} />
+          <div className="grid grid-cols-4 gap-4 mb-3">
+            <div className="col-span-3">
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Description</label>
+              <textarea value={newItem.detail} onChange={e => setNewItem(prev => ({...prev, detail: e.target.value}))}
+                rows={2} placeholder="Brief description of the initiative..."
+                className="w-full rounded-lg border px-3 py-2 text-sm resize-none"
+                style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Est. Cost (if applicable)</label>
+              <input type="number" min="0" step="100" value={newItem.cost}
+                onChange={e => setNewItem(prev => ({...prev, cost: e.target.value}))}
+                placeholder="$0"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
           </div>
           <button onClick={addInitiative} disabled={!newItem.name.trim() || !newItem.target}
             className="px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
@@ -1832,7 +1843,14 @@ function RoadmapTab() {
                               }`} />
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm font-semibold" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
-                                <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>{item.detail}</div>
+                                <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>
+                                  {item.detail}
+                                  {item.cost != null && item.cost > 0 && (
+                                    <span className="ml-2 px-1.5 py-0.5 rounded font-medium" style={{background:'#fdf8ec', color:'#8a5c1a', border:'1px solid #e8d38a'}}>
+                                      Est. {fmt(item.cost)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex items-center gap-3 flex-shrink-0">
                                 <div className="text-center">
