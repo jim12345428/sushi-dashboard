@@ -1606,9 +1606,14 @@ const ROADMAP_DATA = [
 
 function RoadmapTab() {
   const [revisedDates, setRevisedDates] = useState({});
-  const today = new Date().toISOString().split('T')[0];
+  const [comments, setComments] = useState({}); // { itemId: [{ text, date, expectedDate, noChange }] }
+  const [drafts, setDrafts] = useState({}); // { itemId: string }
+  const [noChange, setNoChange] = useState({}); // { itemId: bool }
+  const [completed, setCompleted] = useState({}); // { itemId: bool }
+  const [expanded, setExpanded] = useState({}); // { itemId: bool }
 
   function getTimeline(item) {
+    if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
     const revised = revisedDates[item.id];
     if (!revised) return null;
     const t = new Date(item.target), r = new Date(revised);
@@ -1619,11 +1624,28 @@ function RoadmapTab() {
     return { label: diffDays + 'd behind', color: '#b5282a', bg: '#fef2f2', border: '#f5c6c6' };
   }
 
+  function addComment(itemId) {
+    const isNoChange = noChange[itemId];
+    const text = isNoChange ? 'No change from last update' : (drafts[itemId] || '').trim();
+    if (!text) return;
+    const entry = {
+      text,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      expectedDate: revisedDates[itemId] || null,
+      noChange: isNoChange || false,
+    };
+    setComments(prev => ({ ...prev, [itemId]: [...(prev[itemId] || []), entry] }));
+    setDrafts(prev => ({ ...prev, [itemId]: '' }));
+    setNoChange(prev => ({ ...prev, [itemId]: false }));
+  }
+
+  function fmtTarget(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold" style={{color: NAVY}}>Operational Roadmap</h1>
-        <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Quarterly initiatives across Culinary, People, Operations, and Marketing. Update expected completion dates to track timeline status.</p>
+        <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Update expected dates, add commentary, and mark items complete.</p>
       </div>
 
       {/* Legend */}
@@ -1652,50 +1674,119 @@ function RoadmapTab() {
                     {section.items.map(item => {
                       const tl = getTimeline(item);
                       const revised = revisedDates[item.id] || '';
+                      const itemComments = comments[item.id] || [];
+                      const isComplete = completed[item.id] || false;
+                      const isExpanded = expanded[item.id] || false;
+                      const draft = drafts[item.id] || '';
+                      const isNoChange = noChange[item.id] || false;
+
                       return (
-                        <div key={item.id} className="rounded-lg px-4 py-3" style={{background:'white', border:'1px solid #dde4ed'}}>
-                          <div className="flex items-start gap-3">
-                            <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
-                              item.status === 'complete' ? 'bg-emerald-500' :
-                              item.status === 'active' ? 'bg-amber-400' : 'bg-gray-300'
-                            }`} />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold" style={{color: NAVY}}>{item.name}</div>
-                              <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>{item.detail}</div>
-                            </div>
-                            <div className="flex items-center gap-3 flex-shrink-0">
-                              <div className="text-center">
-                                <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Target</div>
-                                <div className="text-xs font-medium px-2 py-1 rounded" style={{background:'#f0f4f8', color: NAVY}}>
-                                  {new Date(item.target).toLocaleDateString('en-US', {month:'short', day:'numeric'})}
-                                </div>
+                        <div key={item.id} className="rounded-lg overflow-hidden" style={{background:'white', border:'1px solid #dde4ed', opacity: isComplete ? 0.7 : 1}}>
+                          {/* Main row */}
+                          <div className="px-4 py-3">
+                            <div className="flex items-start gap-3">
+                              <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${
+                                isComplete ? 'bg-emerald-500' :
+                                item.status === 'complete' ? 'bg-emerald-500' :
+                                item.status === 'active' ? 'bg-amber-400' : 'bg-gray-300'
+                              }`} />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
+                                <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>{item.detail}</div>
                               </div>
-                              <div className="text-center">
-                                <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Expected</div>
-                                <input type="date" value={revised}
-                                  onChange={e => setRevisedDates(prev => ({...prev, [item.id]: e.target.value}))}
-                                  className="text-xs font-medium px-2 py-1 rounded border text-center w-32"
-                                  style={{borderColor:'#dde4ed', color: NAVY}} />
-                              </div>
-                              {tl ? (
-                                <div className="text-center w-20">
-                                  <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Status</div>
-                                  <span className="text-xs font-medium px-2 py-1 rounded block" style={{background: tl.bg, color: tl.color, border: '1px solid ' + tl.border}}>
-                                    {tl.label}
-                                  </span>
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                <div className="text-center">
+                                  <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Target</div>
+                                  <div className="text-xs font-medium px-2 py-1 rounded" style={{background:'#f0f4f8', color: NAVY}}>
+                                    {fmtTarget(item.target)}
+                                  </div>
                                 </div>
-                              ) : (
-                                <div className="w-20" />
-                              )}
-                              <span className="text-xs font-medium px-2 py-0.5 rounded" style={{
-                                background: item.status === 'complete' ? '#edfaf2' : item.status === 'active' ? '#fdf8ec' : '#f0f4f8',
-                                color: item.status === 'complete' ? '#1a6b3a' : item.status === 'active' ? '#8a5c1a' : '#6b7a99',
-                                border: '1px solid ' + (item.status === 'complete' ? '#9dd4b5' : item.status === 'active' ? '#e8d38a' : '#dde4ed'),
-                              }}>
-                                {item.status === 'complete' ? 'Complete' : item.status === 'active' ? 'In Progress' : 'Planned'}
-                              </span>
+                                <div className="text-center">
+                                  <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Expected</div>
+                                  <input type="date" value={revised} disabled={isComplete}
+                                    onChange={e => setRevisedDates(prev => ({...prev, [item.id]: e.target.value}))}
+                                    className="text-xs font-medium px-2 py-1 rounded border text-center w-32"
+                                    style={{borderColor:'#dde4ed', color: NAVY}} />
+                                </div>
+                                {tl && (
+                                  <div className="text-center w-20">
+                                    <div className="text-xs mb-0.5" style={{color:'#8899aa'}}>Timeline</div>
+                                    <span className="text-xs font-medium px-2 py-1 rounded block" style={{background: tl.bg, color: tl.color, border: '1px solid ' + tl.border}}>
+                                      {tl.label}
+                                    </span>
+                                  </div>
+                                )}
+                                <label className="flex flex-col items-center gap-0.5 cursor-pointer flex-shrink-0">
+                                  <span className="text-xs" style={{color:'#8899aa'}}>Done</span>
+                                  <input type="checkbox" checked={isComplete}
+                                    onChange={e => setCompleted(prev => ({...prev, [item.id]: e.target.checked}))}
+                                    className="w-4 h-4 rounded" />
+                                </label>
+                              </div>
                             </div>
+                            {/* Toggle commentary */}
+                            <button onClick={() => setExpanded(prev => ({...prev, [item.id]: !isExpanded}))}
+                              className="mt-2 text-xs font-medium flex items-center gap-1"
+                              style={{color:'#1a6b8a'}}>
+                              {isExpanded ? '\u25BC' : '\u25B6'} Commentary ({itemComments.length})
+                            </button>
                           </div>
+
+                          {/* Commentary section */}
+                          {isExpanded && (
+                            <div className="px-4 pb-4" style={{borderTop:'1px solid #eef1f6'}}>
+                              {/* Previous comments */}
+                              {itemComments.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                  {itemComments.map((c, ci) => (
+                                    <div key={ci} className="flex gap-3 text-xs py-2" style={{borderBottom:'1px solid #f0f4f8'}}>
+                                      <div className="flex-shrink-0 w-20 font-medium" style={{color:'#6b7a99'}}>{c.date}</div>
+                                      {c.expectedDate && (
+                                        <div className="flex-shrink-0 px-2 py-0.5 rounded" style={{background:'#f0f4f8', color: NAVY}}>
+                                          Exp: {fmtTarget(c.expectedDate)}
+                                        </div>
+                                      )}
+                                      <div className="flex-1" style={{color: c.noChange ? '#8899aa' : '#445566', fontStyle: c.noChange ? 'italic' : 'normal'}}>
+                                        {c.text}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* New comment input */}
+                              <div className="mt-3">
+                                <div className="flex items-start gap-2">
+                                  <div className="flex-1">
+                                    {isNoChange ? (
+                                      <div className="text-xs italic py-2 px-3 rounded" style={{background:'#f0f4f8', color:'#8899aa'}}>
+                                        No change from last update
+                                      </div>
+                                    ) : (
+                                      <textarea value={draft} rows={2} placeholder="Add an update..."
+                                        onChange={e => setDrafts(prev => ({...prev, [item.id]: e.target.value}))}
+                                        className="w-full text-xs rounded border px-3 py-2 resize-none"
+                                        style={{borderColor:'#dde4ed', color: NAVY}} />
+                                    )}
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <label className="flex items-center gap-1.5 cursor-pointer text-xs" style={{color:'#6b7a99'}}>
+                                        <input type="checkbox" checked={isNoChange}
+                                          onChange={e => setNoChange(prev => ({...prev, [item.id]: e.target.checked}))}
+                                          className="rounded" />
+                                        No change from last update
+                                      </label>
+                                    </div>
+                                  </div>
+                                  <button onClick={() => addComment(item.id)}
+                                    disabled={!isNoChange && !draft.trim()}
+                                    className="px-3 py-2 rounded text-xs font-semibold text-white disabled:opacity-40 flex-shrink-0"
+                                    style={{background: NAVY}}>
+                                    Post
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
