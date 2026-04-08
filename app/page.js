@@ -753,8 +753,8 @@ function calcProposedPayout(revenue) {
   return share;
 }
 
-function calcProposedOperatorCosts(storeKey, revenue) {
-  const cogs = revenue * 0.20;
+function calcProposedOperatorCosts(storeKey, revenue, cogsRate) {
+  const cogs = revenue * cogsRate;
   const staffHrs = additionalStaffHrs(storeKey);
   const payroll = staffHrs * 25 * 52 * 1.25;
   return { cogs, payroll };
@@ -763,6 +763,7 @@ function calcProposedOperatorCosts(storeKey, revenue) {
 function ModelComparison({ storeSales }) {
   const defaultGrowth = () => Object.fromEntries(STORES.map(s => [s, 10]));
   const [storeGrowth, setStoreGrowth] = useState(defaultGrowth);
+  const [opCogsRate, setOpCogsRate] = useState(20);
 
   const analysis = useMemo(() => {
     return STORES.map(storeKey => {
@@ -813,7 +814,7 @@ function ModelComparison({ storeSales }) {
       const proposedFjord = proposedRevenue - proposedPayout;
 
       // Operator costs under proposed
-      const propOp = calcProposedOperatorCosts(storeKey, proposedRevenue);
+      const propOp = calcProposedOperatorCosts(storeKey, proposedRevenue, opCogsRate / 100);
       const opTakeHome = proposedPayout - propOp.cogs - propOp.payroll;
 
       // Monthly YoY breakdown for analysis period only
@@ -846,7 +847,7 @@ function ModelComparison({ storeSales }) {
         monthlyYoY,
       };
     }).filter(Boolean);
-  }, [storeSales, storeGrowth]);
+  }, [storeSales, storeGrowth, opCogsRate]);
 
   const totals = useMemo(() => {
     const t = { actRev:0, propRev:0, curLabor:0, curCogs:0, curFjord:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
@@ -900,6 +901,14 @@ function ModelComparison({ storeSales }) {
           className="text-xs px-3 py-1 rounded-lg ml-2" style={{background:'#f0f4f8', color:'#6b7a99', border:'1px solid #dde4ed'}}>
           Reset to 10%
         </button>
+        <div className="ml-auto flex items-center gap-1">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Op COGS:</span>
+          <input type="number" min="10" max="35" step="1" value={opCogsRate}
+            onChange={e => setOpCogsRate(Number(e.target.value))}
+            className="w-14 rounded-lg border px-2 py-1 text-sm font-bold text-center"
+            style={{borderColor:'#dde4ed', color: NAVY}} />
+          <span className="text-sm font-bold" style={{color:'#6b7a99'}}>%</span>
+        </div>
       </div>
 
       {/* Comparison Table */}
