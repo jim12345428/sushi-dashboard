@@ -1624,12 +1624,34 @@ function RoadmapTab() {
     return { label: diffDays + 'd behind', color: '#b5282a', bg: '#fef2f2', border: '#f5c6c6' };
   }
 
+  const [editing, setEditing] = useState({}); // { itemId-commentIdx: string }
+
+  // Edit cutoff: previous Tuesday at 5pm. Comments written this week (since last Tue 5pm) are editable until next Tue 5pm.
+  function getEditCutoff() {
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun, 2=Tue
+    const hour = now.getHours();
+    // Find the most recent Tuesday at 5pm
+    let daysBack = (day - 2 + 7) % 7;
+    if (daysBack === 0 && hour >= 17) daysBack = 0; // it's Tuesday after 5pm = this cutoff just passed
+    else if (daysBack === 0) daysBack = 7; // it's Tuesday before 5pm = cutoff was last Tuesday
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - daysBack);
+    cutoff.setHours(17, 0, 0, 0);
+    return cutoff;
+  }
+
+  function isEditable(commentTimestamp) {
+    return new Date(commentTimestamp) >= getEditCutoff();
+  }
+
   function addComment(itemId) {
     const isNoChange = noChange[itemId];
     const text = isNoChange ? 'No change from last update' : (drafts[itemId] || '').trim();
     if (!text) return;
     const entry = {
       text,
+      timestamp: new Date().toISOString(),
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       expectedDate: revisedDates[itemId] || null,
       noChange: isNoChange || false,
@@ -1637,6 +1659,18 @@ function RoadmapTab() {
     setComments(prev => ({ ...prev, [itemId]: [...(prev[itemId] || []), entry] }));
     setDrafts(prev => ({ ...prev, [itemId]: '' }));
     setNoChange(prev => ({ ...prev, [itemId]: false }));
+  }
+
+  function saveEdit(itemId, ci) {
+    const key = itemId + '-' + ci;
+    const newText = editing[key];
+    if (newText === undefined) return;
+    setComments(prev => {
+      const arr = [...(prev[itemId] || [])];
+      arr[ci] = { ...arr[ci], text: newText.trim() || arr[ci].text };
+      return { ...prev, [itemId]: arr };
+    });
+    setEditing(prev => { const n = {...prev}; delete n[key]; return n; });
   }
 
   function fmtTarget(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
@@ -1738,19 +1772,53 @@ function RoadmapTab() {
                               {/* Previous comments */}
                               {itemComments.length > 0 && (
                                 <div className="mt-3 space-y-2">
-                                  {itemComments.map((c, ci) => (
-                                    <div key={ci} className="flex gap-3 text-xs py-2" style={{borderBottom:'1px solid #f0f4f8'}}>
-                                      <div className="flex-shrink-0 w-20 font-medium" style={{color:'#6b7a99'}}>{c.date}</div>
-                                      {c.expectedDate && (
-                                        <div className="flex-shrink-0 px-2 py-0.5 rounded" style={{background:'#f0f4f8', color: NAVY}}>
-                                          Exp: {fmtTarget(c.expectedDate)}
+                                  {itemComments.map((c, ci) => {
+                                    const editKey = item.id + '-' + ci;
+                                    const canEdit = c.timestamp && isEditable(c.timestamp);
+                                    const isEditMode = editing[editKey] !== undefined;
+                                    return (
+                                      <div key={ci} className="flex gap-3 text-xs py-2 items-start" style={{borderBottom:'1px solid #f0f4f8'}}>
+                                        <div className="flex-shrink-0 w-20 font-medium" style={{color:'#6b7a99'}}>{c.date}</div>
+                                        {c.expectedDate && (
+                                          <div className="flex-shrink-0 px-2 py-0.5 rounded" style={{background:'#f0f4f8', color: NAVY}}>
+                                            Exp: {fmtTarget(c.expectedDate)}
+                                          </div>
+                                        )}
+                                        <div className="flex-1">
+                                          {isEditMode ? (
+                                            <div className="flex gap-2">
+                                              <textarea value={editing[editKey]} rows={2}
+                                                onChange={e => setEditing(prev => ({...prev, [editKey]: e.target.value}))}
+                                                className="flex-1 text-xs rounded border px-2 py-1 resize-none"
+                                                style={{borderColor:'#b3d9eb', color: NAVY}} />
+                                              <div className="flex flex-col gap-1">
+                                                <button onClick={() => saveEdit(item.id, ci)}
+                                                  className="px-2 py-1 rounded text-xs font-medium text-white" style={{background:'#1a6b3a'}}>Save</button>
+                                                <button onClick={() => setEditing(prev => { const n={...prev}; delete n[editKey]; return n; })}
+                                                  className="px-2 py-1 rounded text-xs font-medium" style={{background:'#f0f4f8', color:'#6b7a99'}}>Cancel</button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <span style={{color: c.noChange ? '#8899aa' : '#445566', fontStyle: c.noChange ? 'italic' : 'normal'}}>
+                                              {c.text}
+                                            </span>
+                                          )}
                                         </div>
-                                      )}
-                                      <div className="flex-1" style={{color: c.noChange ? '#8899aa' : '#445566', fontStyle: c.noChange ? 'italic' : 'normal'}}>
-                                        {c.text}
+                                        {canEdit && !isEditMode && (
+                                          <button onClick={() => setEditing(prev => ({...prev, [editKey]: c.text}))}
+                                            className="flex-shrink-0 text-xs px-2 py-0.5 rounded"
+                                            style={{color:'#1a6b8a', background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                                            Edit
+                                          </button>
+                                        )}
+                                        {!canEdit && !isEditMode && (
+                                          <span className="flex-shrink-0 text-xs" style={{color:'#ccd4e0'}} title="Locked — past Tuesday 5pm cutoff">
+                                            &#128274;
+                                          </span>
+                                        )}
                                       </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               )}
 
