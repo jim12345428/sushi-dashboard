@@ -1616,12 +1616,13 @@ function RoadmapTab() {
   const [expanded, setExpanded] = useState({});
   const [customItems, setCustomItems] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '' });
+  const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '', valueAdd: '' });
   const [activeQuarter, setActiveQuarter] = useState('Q1 2026');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [subItems, setSubItems] = useState({});
   const [showSubForm, setShowSubForm] = useState({});
   const [subDraft, setSubDraft] = useState({});
+  const [valueAdd, setValueAdd] = useState({}); // { itemId: string }
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1703,8 +1704,8 @@ function RoadmapTab() {
     if (!newItem.name.trim() || !newItem.target) return;
     const id = 'custom-' + Date.now();
     const cost = newItem.cost ? parseFloat(newItem.cost) : null;
-    setCustomItems(prev => [...prev, { ...newItem, id, name: newItem.name.trim(), detail: newItem.detail.trim(), status: 'planned', cost }]);
-    setNewItem({ name: '', detail: '', quarter: newItem.quarter, category: newItem.category, target: '', cost: '' });
+    setCustomItems(prev => [...prev, { ...newItem, id, name: newItem.name.trim(), detail: newItem.detail.trim(), valueAdd: newItem.valueAdd.trim(), status: 'planned', cost }]);
+    setNewItem({ name: '', detail: '', quarter: newItem.quarter, category: newItem.category, target: '', cost: '', valueAdd: '' });
     setShowAddForm(false);
   }
 
@@ -1820,14 +1821,26 @@ function RoadmapTab() {
               item.status === 'active' ? 'bg-amber-400' : 'bg-gray-300'
             }`} />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
-              <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>
-                {item.detail}
-                {item.cost != null && item.cost > 0 && (
-                  <span className="ml-2 px-1.5 py-0.5 rounded font-medium" style={{background:'#fdf8ec', color:'#8a5c1a', border:'1px solid #e8d38a'}}>
-                    Est. {fmt(item.cost)}
-                  </span>
-                )}
+              <div className="text-sm font-semibold mb-1" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <div className="text-xs" style={{color:'#6b7a99'}}>
+                    {item.detail}
+                    {item.cost != null && item.cost > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 rounded font-medium" style={{background:'#fdf8ec', color:'#8a5c1a', border:'1px solid #e8d38a'}}>
+                        Est. {fmt(item.cost)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="w-56 flex-shrink-0">
+                  <div className="text-xs font-medium mb-1" style={{color:'#1a6b3a'}}>How does this add value?</div>
+                  <textarea value={valueAdd[item.id] || item.valueAdd || ''} rows={2}
+                    onChange={e => setValueAdd(prev => ({...prev, [item.id]: e.target.value}))}
+                    placeholder="Impact on revenue, costs, quality, or customer experience..."
+                    className="w-full text-xs rounded border px-2 py-1 resize-none"
+                    style={{borderColor:'#9dd4b5', color: NAVY, background:'#fafffe'}} />
+                </div>
               </div>
               {/* Sub-initiatives */}
               {subs.length > 0 && (
@@ -2085,6 +2098,13 @@ function RoadmapTab() {
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 style={{borderColor:'#dde4ed', color: NAVY}} />
             </div>
+          </div>
+          <div className="mb-3">
+            <label className="text-xs font-medium block mb-1" style={{color:'#1a6b3a'}}>How does this add value?</label>
+            <textarea value={newItem.valueAdd} onChange={e => setNewItem(prev => ({...prev, valueAdd: e.target.value}))}
+              rows={2} placeholder="Impact on revenue, costs, quality, or customer experience..."
+              className="w-full rounded-lg border px-3 py-2 text-sm resize-none"
+              style={{borderColor:'#9dd4b5', color: NAVY}} />
           </div>
           <button onClick={addInitiative} disabled={!newItem.name.trim() || !newItem.target}
             className="px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
