@@ -705,6 +705,316 @@ function IncomeCalculator() {
   );
 }
 
+/* ── MODEL COMPARISON ── */
+const CURRENT_MODELS = {
+  brooklyn:     { type: 'concession', pct: 0.70,  label: 'Concession 70%' },
+  darien:       { type: 'concession', pct: 0.525, label: 'Concession 52.5%' },
+  'cos cob':    { type: 'inhouse', emps: 1, empHrs: 50, cogsRate: 0.18, label: '1 emp + temps, 18% COGS' },
+  larchmont:    { type: 'inhouse', emps: 0, empHrs: 0,  cogsRate: 0.18, label: 'All temps, 18% COGS' },
+  westport:     { type: 'inhouse', emps: 1, empHrs: 50, cogsRate: 0.18, label: '1 emp + temps, 18% COGS' },
+  'new canaan': { type: 'inhouse', emps: 2, empHrs: 50, cogsRate: 0.18, label: '2 emps + temps, 18% COGS' },
+};
+
+function calcCurrentFjord(storeKey, revenue) {
+  const m = CURRENT_MODELS[storeKey];
+  if (m.type === 'concession') return revenue * (1 - m.pct);
+
+  const STORE_HRS = 62, WEEKS = 52, EMP_RATE = 25, TEMP_DAY = 335;
+  const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.25;
+  const empAnnual = empWeekly * WEEKS;
+  const totalEmpHrs = m.emps * m.empHrs;
+  const needPersonHrs = m.emps >= 2 ? STORE_HRS * 2 : STORE_HRS;
+  const gapHrs = m.emps === 0 ? 0 : Math.max(0, needPersonHrs - totalEmpHrs);
+  const tempCost = m.emps === 0 ? 7 * TEMP_DAY * WEEKS : gapHrs * (TEMP_DAY / 9) * WEEKS;
+  const labor = m.emps * empAnnual + tempCost;
+  const cogs = revenue * m.cogsRate;
+  return revenue - labor - cogs;
+}
+
+function calcProposedPayout(revenue) {
+  let share = 0, prev = 0;
+  for (const t of BASE_TIERS) {
+    const tierRev = Math.min(revenue, t.upTo) - prev;
+    if (tierRev <= 0) break;
+    share += tierRev * t.pct;
+    prev = t.upTo;
+  }
+  return share;
+}
+
+function ModelComparison({ storeSales }) {
+  const [growthOverrides, setGrowthOverrides] = useState({});
+
+  const analysis = useMemo(() => {
+    return STORES.map(storeKey => {
+      const sales = storeSales[storeKey] || [];
+      if (sales.length === 0) return null;
+
+      // Split into years for YoY calc
+      const byMonth = {};
+      sales.forEach(s => {
+        const d = new Date(s.date);
+        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        byMonth[key] = (byMonth[key] || 0) + s.gross;
+      });
+
+      // Trailing 12 months revenue
+      const allDates = sales.map(s => new Date(s.date)).sort((a, b) => a - b);
+      const lastDate = allDates[allDates.length - 1];
+      const oneYearAgo = new Date(lastDate);
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+      let trailing12 = 0, prior12 = 0;
+      const twoYearsAgo = new Date(oneYearAgo);
+      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 1);
+
+      sales.forEach(s => {
+        const d = new Date(s.date);
+        if (d > oneYearAgo && d <= lastDate) trailing12 += s.gross;
+        if (d > twoYearsAgo && d <= oneYearAgo) prior12 += s.gross;
+      });
+
+      const actualGrowth = prior12 > 0 ? (trailing12 - prior12) / prior12 : 0;
+      const overrideGrowth = growthOverrides[storeKey];
+      const useGrowth = overrideGrowth !== undefined ? overrideGrowth / 100 : actualGrowth;
+      const modeledRevenue = prior12 > 0 ? prior12 * (1 + useGrowth) : trailing12;
+
+      // Monthly YoY breakdown
+      const months = Object.keys(byMonth).sort();
+      const monthlyYoY = [];
+      months.forEach(m => {
+        const [y, mo] = m.split('-');
+        const priorKey = (parseInt(y) - 1) + '-' + mo;
+        if (byMonth[priorKey]) {
+          monthlyYoY.push({
+            month: m,
+            current: byMonth[m],
+            prior: byMonth[priorKey],
+            growth: (byMonth[m] - byMonth[priorKey]) / byMonth[priorKey],
+          });
+        }
+      });
+
+      // Current model
+      const currentFjord = calcCurrentFjord(storeKey, modeledRevenue);
+      const currentModel = CURRENT_MODELS[storeKey];
+
+      // Proposed model
+      const proposedPayout = calcProposedPayout(modeledRevenue);
+      const proposedFjord = modeledRevenue - proposedPayout;
+
+      // Growth bonus under proposed
+      let growthBonus = 0;
+      if (useGrowth > GROWTH_ACCEL_TIERS[0].above) {
+        for (const t of GROWTH_ACCEL_TIERS) {
+          if (useGrowth <= t.above) continue;
+          growthBonus += modeledRevenue * (Math.min(useGrowth, t.upTo) - t.above) * t.pct;
+        }
+      }
+      const proposedPayoutWithBonus = proposedPayout + growthBonus;
+      const proposedFjordWithBonus = modeledRevenue - proposedPayoutWithBonus;
+
+      return {
+        storeKey,
+        trailing12,
+        prior12,
+        actualGrowth,
+        useGrowth,
+        isOverridden: overrideGrowth !== undefined,
+        modeledRevenue,
+        currentModel: currentModel.label,
+        currentFjord,
+        proposedPayout: proposedPayoutWithBonus,
+        proposedFjord: proposedFjordWithBonus,
+        growthBonus,
+        delta: proposedFjordWithBonus - currentFjord,
+        monthlyYoY,
+      };
+    }).filter(Boolean);
+  }, [storeSales, growthOverrides]);
+
+  const totals = useMemo(() => {
+    let rev = 0, curFjord = 0, newFjord = 0;
+    analysis.forEach(a => { rev += a.modeledRevenue; curFjord += a.currentFjord; newFjord += a.proposedFjord; });
+    return { rev, curFjord, newFjord, delta: newFjord - curFjord };
+  }, [analysis]);
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h1 className="text-xl font-bold" style={{color: NAVY}}>Model Comparison</h1>
+        <p className="text-sm mt-1" style={{color:'#6b7a99'}}>Current operating model vs proposed owner-operator model. Adjust growth rates to explore scenarios.</p>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          ['Total Revenue', fmt(totals.rev), '#445566', '#f7f9fc', '#dde4ed'],
+          ['Current Fjord Net', fmt(totals.curFjord), '#1a6b8a', '#edf6fb', '#b3d9eb'],
+          ['Proposed Fjord Net', fmt(totals.newFjord), GOLD_ACCENT, '#fdf8ec', '#e8d38a'],
+          ['Delta', (totals.delta >= 0 ? '+' : '') + fmt(totals.delta), totals.delta >= 0 ? '#1a6b3a' : '#b5282a', totals.delta >= 0 ? '#edfaf2' : '#fef2f2', totals.delta >= 0 ? '#9dd4b5' : '#f5c6c6'],
+        ].map(([label, val, color, bg, border]) => (
+          <div key={label} className="rounded-xl p-4" style={{background: bg, border: '1px solid ' + border}}>
+            <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>{label}</div>
+            <div className="text-2xl font-bold" style={{color}}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Growth Rate Controls */}
+      <div className="rounded-xl p-5 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>YoY Growth Rate by Store</div>
+          <button onClick={() => setGrowthOverrides({})}
+            className="text-xs px-3 py-1 rounded-lg" style={{background:'#f0f4f8', color:'#6b7a99', border:'1px solid #dde4ed'}}>
+            Reset to Actuals
+          </button>
+        </div>
+        <div className="grid grid-cols-6 gap-4">
+          {analysis.map(a => {
+            const displayGrowth = a.isOverridden ? growthOverrides[a.storeKey] : Math.round(a.actualGrowth * 100);
+            return (
+              <div key={a.storeKey}>
+                <div className="text-xs font-medium mb-1" style={{color: NAVY}}>{STORE_LABELS[a.storeKey]}</div>
+                <div className="flex items-center gap-2">
+                  <input type="range" min="-20" max="40" step="1"
+                    value={displayGrowth}
+                    onChange={e => setGrowthOverrides(prev => ({...prev, [a.storeKey]: Number(e.target.value)}))}
+                    className="flex-1" style={{accentColor: a.useGrowth >= 0 ? '#1a6b3a' : '#b5282a'}} />
+                  <span className="text-sm font-bold w-12 text-right" style={{color: a.useGrowth > 0 ? '#1a6b3a' : a.useGrowth < 0 ? '#b5282a' : NAVY}}>
+                    {a.useGrowth > 0 ? '+' : ''}{(a.useGrowth * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="text-xs mt-1" style={{color: a.isOverridden ? '#8a5c1a' : '#8899aa'}}>
+                  {a.isOverridden ? 'Override' : 'Actual'}: {(a.actualGrowth * 100).toFixed(1)}%
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Comparison Table */}
+      <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
+              <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Revenue</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>YoY</th>
+              <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Fjord Net</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb'}}>Margin</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Operator Payout</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Fjord Net</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#fdf8ec'}}>Margin</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analysis.map(a => {
+              const deltaColor = a.delta >= 0 ? '#1a6b3a' : '#b5282a';
+              return (
+                <tr key={a.storeKey} style={{borderBottom:'1px solid #eef1f6'}} className="hover:bg-blue-50/30">
+                  <td className="px-4 py-3 font-semibold" style={{color: NAVY}}>{STORE_LABELS[a.storeKey]}</td>
+                  <td className="px-4 py-3 text-right" style={{color:'#445566'}}>{fmt(a.modeledRevenue)}</td>
+                  <td className="px-4 py-3 text-right font-medium" style={{color: a.useGrowth > 0 ? '#1a6b3a' : a.useGrowth < 0 ? '#b5282a' : '#6b7a99'}}>
+                    {a.useGrowth > 0 ? '+' : ''}{(a.useGrowth * 100).toFixed(1)}%
+                  </td>
+                  <td className="px-4 py-3 text-xs" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{a.currentModel}</td>
+                  <td className="px-4 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
+                  <td className="px-4 py-3 text-right" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{pct(a.currentFjord / a.modeledRevenue)}</td>
+                  <td className="px-4 py-3 text-right" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>
+                    {fmt(a.proposedPayout)}
+                    {a.growthBonus > 0 && <span className="text-xs" style={{color:'#1a6b3a'}}> (+{fmt(a.growthBonus)})</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
+                  <td className="px-4 py-3 text-right" style={{color:'#6b7a99', background:'rgba(253,248,236,0.4)'}}>{pct(a.proposedFjord / a.modeledRevenue)}</td>
+                  <td className="px-4 py-3 text-right font-bold" style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
+                    {a.delta >= 0 ? '+' : ''}{fmt(a.delta)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{background:'#f0f4f8', borderTop:'2px solid ' + NAVY}}>
+              <td className="px-4 py-3 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>Total</td>
+              <td className="px-4 py-3 text-right font-bold" style={{color:'#445566'}}>{fmt(totals.rev)}</td>
+              <td className="px-4 py-3"></td>
+              <td className="px-4 py-3" style={{background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}></td>
+              <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
+              <td className="px-4 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(237,246,251,0.6)'}}>{pct(totals.curFjord / totals.rev)}</td>
+              <td className="px-4 py-3" style={{background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #e8d38a'}}></td>
+              <td className="px-4 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.newFjord)}</td>
+              <td className="px-4 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(253,248,236,0.6)'}}>{pct(totals.newFjord / totals.rev)}</td>
+              <td className="px-4 py-3 text-right font-bold" style={{color: totals.delta >= 0 ? '#1a6b3a' : '#b5282a', borderLeft:'2px solid #dde4ed'}}>
+                {totals.delta >= 0 ? '+' : ''}{fmt(totals.delta)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Monthly YoY Detail */}
+      <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#f7f9fc', borderBottom:'1px solid #dde4ed'}}>
+          Monthly YoY Growth by Store
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
+                <th className="text-left px-3 py-2 font-semibold" style={{color:'#6b7a99'}}>Month</th>
+                {STORES.map(s => (
+                  <th key={s} className="text-right px-3 py-2 font-semibold" style={{color: NAVY}}>{STORE_LABELS[s]}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                // Collect all months that have YoY data
+                const allMonths = new Set();
+                analysis.forEach(a => a.monthlyYoY.forEach(m => allMonths.add(m.month)));
+                const sortedMonths = [...allMonths].sort().reverse();
+                return sortedMonths.map(month => (
+                  <tr key={month} style={{borderBottom:'1px solid #eef1f6'}}>
+                    <td className="px-3 py-2 font-medium" style={{color: NAVY}}>{month}</td>
+                    {STORES.map(storeKey => {
+                      const a = analysis.find(x => x.storeKey === storeKey);
+                      const m = a?.monthlyYoY.find(x => x.month === month);
+                      if (!m) return <td key={storeKey} className="px-3 py-2 text-right" style={{color:'#ccd4e0'}}>-</td>;
+                      const g = m.growth;
+                      return (
+                        <td key={storeKey} className="px-3 py-2 text-right font-medium" style={{color: g > 0.05 ? '#1a6b3a' : g < -0.05 ? '#b5282a' : '#6b7a99'}}>
+                          {g > 0 ? '+' : ''}{(g * 100).toFixed(1)}%
+                          <span className="block font-normal" style={{color:'#8899aa', fontSize:'10px'}}>{fmt(m.current)}</span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ));
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Key Insight */}
+      <div className="rounded-xl p-5" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
+        <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{color:'#6b7a99'}}>What This Means</div>
+        <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>
+          The <strong style={{color: NAVY}}>Current Model</strong> column shows what Fjord nets today under the existing mix of concessions, employees, and temps.
+          The <strong style={{color: GOLD_ACCENT}}>Proposed Model</strong> shows what Fjord would net under the owner-operator revenue share.
+          Positive delta means the proposed model is better for Fjord; negative means it costs more.
+          The trade-off: Fjord gives up some margin but eliminates all direct labor management, temp coordination, employment liability, and COGS procurement for in-house stores.
+          Adjust the growth sliders to see how different performance scenarios affect the comparison.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── MAIN DASHBOARD ── */
 export default function Dashboard() {
   const [tab, setTab]             = useState('overview');
@@ -825,7 +1135,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History']].map(([id,label]) => (
+        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['compare','Model Comparison'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -837,7 +1147,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {!['modeler','overview','recruit','income'].includes(tab) && (
+        {!['modeler','overview','recruit','income','compare'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -1164,6 +1474,11 @@ export default function Dashboard() {
                 })}
               </div>
             </div>
+          )}
+
+          {/* MODEL COMPARISON */}
+          {tab === 'compare' && (
+            <ModelComparison storeSales={allSales} />
           )}
 
           {/* SCENARIO MODELER */}
