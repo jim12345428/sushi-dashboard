@@ -1604,13 +1604,19 @@ const ROADMAP_DATA = [
   ]},
 ];
 
+const ROADMAP_QUARTERS = ['Q1 2026', 'Q2 2026', 'Q3 2026'];
+const ROADMAP_CATEGORIES = ['Culinary', 'People', 'HR', 'Operations', 'Marketing'];
+
 function RoadmapTab() {
   const [revisedDates, setRevisedDates] = useState({});
-  const [comments, setComments] = useState({}); // { itemId: [{ text, date, expectedDate, noChange }] }
-  const [drafts, setDrafts] = useState({}); // { itemId: string }
-  const [noChange, setNoChange] = useState({}); // { itemId: bool }
-  const [completed, setCompleted] = useState({}); // { itemId: bool }
-  const [expanded, setExpanded] = useState({}); // { itemId: bool }
+  const [comments, setComments] = useState({});
+  const [drafts, setDrafts] = useState({});
+  const [noChange, setNoChange] = useState({});
+  const [completed, setCompleted] = useState({});
+  const [expanded, setExpanded] = useState({});
+  const [customItems, setCustomItems] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '' });
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1688,14 +1694,99 @@ function RoadmapTab() {
     setEditing(prev => { const n = {...prev}; delete n[key]; return n; });
   }
 
+  function addInitiative() {
+    if (!newItem.name.trim() || !newItem.target) return;
+    const id = 'custom-' + Date.now();
+    setCustomItems(prev => [...prev, { ...newItem, id, name: newItem.name.trim(), detail: newItem.detail.trim(), status: 'planned' }]);
+    setNewItem({ name: '', detail: '', quarter: newItem.quarter, category: newItem.category, target: '' });
+    setShowAddForm(false);
+  }
+
   function fmtTarget(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+
+  // Merge custom items into roadmap data
+  const mergedData = useMemo(() => {
+    return ROADMAP_DATA.map(q => {
+      const extras = customItems.filter(ci => ci.quarter === q.quarter);
+      if (extras.length === 0) return q;
+      const newSections = [...q.sections.map(s => ({ ...s, items: [...s.items] }))];
+      extras.forEach(ci => {
+        let section = newSections.find(s => s.title === ci.category);
+        if (!section) {
+          section = { title: ci.category, items: [] };
+          newSections.push(section);
+        }
+        section.items.push({ id: ci.id, name: ci.name, detail: ci.detail, status: ci.status, target: ci.target });
+      });
+      return { ...q, sections: newSections };
+    });
+  }, [customItems]);
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{color: NAVY}}>Operational Roadmap</h1>
-        <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Update expected dates, add commentary, and mark items complete.</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{color: NAVY}}>Operational Roadmap</h1>
+          <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Update expected dates, add commentary, and mark items complete.</p>
+        </div>
+        <button onClick={() => setShowAddForm(!showAddForm)}
+          className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
+          style={{background: showAddForm ? '#6b7a99' : NAVY, border: '1px solid ' + GOLD_ACCENT}}>
+          {showAddForm ? 'Cancel' : '+ Add Initiative'}
+        </button>
       </div>
+
+      {/* Add Initiative Form */}
+      {showAddForm && (
+        <div className="rounded-xl p-5 mb-6" style={{background:'white', border: '2px solid ' + GOLD_ACCENT}}>
+          <div className="text-sm font-bold mb-3" style={{color: NAVY}}>New Initiative</div>
+          <div className="grid grid-cols-2 gap-4 mb-3">
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Initiative Name</label>
+              <input value={newItem.name} onChange={e => setNewItem(prev => ({...prev, name: e.target.value}))}
+                placeholder="e.g., New POS System Rollout"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Target Completion Date</label>
+              <input type="date" value={newItem.target} onChange={e => setNewItem(prev => ({...prev, target: e.target.value}))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-3">
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Quarter</label>
+              <select value={newItem.quarter} onChange={e => setNewItem(prev => ({...prev, quarter: e.target.value}))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{borderColor:'#dde4ed', color: NAVY}}>
+                {ROADMAP_QUARTERS.map(q => <option key={q} value={q}>{q}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Category</label>
+              <select value={newItem.category} onChange={e => setNewItem(prev => ({...prev, category: e.target.value}))}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                style={{borderColor:'#dde4ed', color: NAVY}}>
+                {ROADMAP_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mb-3">
+            <label className="text-xs font-medium block mb-1" style={{color:'#6b7a99'}}>Description</label>
+            <textarea value={newItem.detail} onChange={e => setNewItem(prev => ({...prev, detail: e.target.value}))}
+              rows={2} placeholder="Brief description of the initiative..."
+              className="w-full rounded-lg border px-3 py-2 text-sm resize-none"
+              style={{borderColor:'#dde4ed', color: NAVY}} />
+          </div>
+          <button onClick={addInitiative} disabled={!newItem.name.trim() || !newItem.target}
+            className="px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
+            style={{background: NAVY}}>
+            Add to Roadmap
+          </button>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex items-center gap-6 mb-6 text-xs" style={{color:'#6b7a99'}}>
@@ -1709,7 +1800,7 @@ function RoadmapTab() {
         </div>
       </div>
 
-      {ROADMAP_DATA.map(q => (
+      {mergedData.map(q => (
         <div key={q.quarter} className="mb-8">
           <div className="rounded-xl overflow-hidden" style={{border: '2px solid ' + q.border}}>
             <div className="px-5 py-4" style={{background: q.color}}>
