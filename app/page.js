@@ -1726,134 +1726,25 @@ function RoadmapTab() {
     }));
   }
 
-  async function exportRoadmapPptx() {
-    const pptxgen = (await import('pptxgenjs')).default;
-    const prs = new pptxgen();
-    prs.layout = 'LAYOUT_WIDE';
-    const navy = '1B2A4A', white = 'FFFFFF', green = '1a6b3a', lineColor = '1B2A4A';
-
-    // Gather ALL items for the active quarter (ignore category filter for export)
-    const allCategoryItems = {};
-    if (activeQ) {
-      activeQ.sections.forEach(section => {
-        if (!allCategoryItems[section.title]) allCategoryItems[section.title] = [];
-        section.items.forEach(item => {
-          allCategoryItems[section.title].push({ ...item, sectionTitle: section.title, isCompleted: !!completed[item.id] });
-        });
-      });
-    }
-
-    // One slide per category
-    const categories = ['Operations', 'Marketing', 'Culinary', 'People'];
-    for (const cat of categories) {
-      const items = allCategoryItems[cat] || [];
-      const slide = prs.addSlide();
-
-      // Navy header line
-      slide.addText(cat + ' Update', {
-        x: 0.4, y: 0.25, w: 12.3, h: 0.55,
-        fontSize: 22, fontFace: 'Georgia', color: navy, bold: false,
-      });
-      slide.addShape(prs.ShapeType.rect, {
-        x: 0.4, y: 0.8, w: 12.3, h: 0.03, fill: { color: navy },
-      });
-
-      // Navy footer bar
-      slide.addShape(prs.ShapeType.rect, {
-        x: 0, y: 7.0, w: 13.33, h: 0.5, fill: { color: navy },
-      });
-
-      if (items.length === 0) {
-        slide.addText('No initiatives for this quarter.', {
-          x: 0.6, y: 1.2, w: 11, fontSize: 12, color: '8899aa', italic: true,
-        });
-        continue;
-      }
-
-      // Table header
-      const hdr = { color: white, fill: { color: navy }, bold: true, fontSize: 8, align: 'center', valign: 'middle' };
-      const cell = { fontSize: 7.5, align: 'left', valign: 'top', border: { type: 'solid', color: 'D0D5DD', pt: 0.5 } };
-      const cellCenter = { ...cell, align: 'center' };
-
-      const rows = [[
-        { text: 'P', options: { ...hdr, fontSize: 7 } },
-        { text: 'Initiative', options: hdr },
-        { text: 'Details', options: hdr },
-        { text: 'Target', options: hdr },
-        { text: 'Expected', options: hdr },
-        { text: 'Status', options: hdr },
-        { text: 'Latest Comment', options: hdr },
-        { text: 'Cost', options: hdr },
-      ]];
-
-      items.forEach(item => {
-        const p = urgency[item.id] ?? item.urgency ?? 2;
-        const revised = revisedDates[item.id];
-        const tl = getTimeline(item);
-        const latest = (comments[item.id] || []).slice(-1)[0];
-        const subs = subItems[item.id] || [];
-        const isComplete = item.isCompleted;
-
-        // Build detail text with sub-items
-        let detailText = item.detail || '';
-        if (subs.length > 0) {
-          detailText += (detailText ? '\n' : '') + subs.map(s => (s.done ? '\u2713 ' : '\u25CB ') + s.name).join('\n');
-        }
-
-        // Status text
-        let statusText = isComplete ? '\u2713 Done' : (tl ? tl.label : '-');
-        if (isComplete && completionNotes[item.id]) {
-          statusText += '\n' + completionNotes[item.id];
-        }
-        const statusColor = isComplete ? green : (tl ? (tl.color === '#1a6b3a' ? green : tl.color === '#b5282a' ? 'b5282a' : '8a5c1a') : '999999');
-
-        const pColors = { 1: 'b5282a', 2: '8a5c1a', 3: '6b7a99' };
-
-        rows.push([
-          { text: 'P' + p, options: { ...cellCenter, bold: true, fontSize: 7, color: pColors[p] } },
-          { text: item.name, options: { ...cell, bold: true, color: isComplete ? green : navy } },
-          { text: detailText || '-', options: { ...cell, fontSize: 7 } },
-          { text: fmtTarget(item.target), options: cellCenter },
-          { text: revised ? fmtTarget(revised) : '-', options: cellCenter },
-          { text: statusText, options: { ...cellCenter, color: statusColor, fontSize: 7 } },
-          { text: latest ? latest.text : '-', options: { ...cell, fontSize: 6.5 } },
-          { text: item.cost ? fmt(item.cost) : '-', options: { ...cellCenter, fontSize: 7 } },
-        ]);
-      });
-
-      slide.addTable(rows, {
-        x: 0.3, y: 1.0, w: 12.7,
-        colW: [0.4, 2.2, 3.0, 0.9, 0.9, 1.1, 3.2, 1.0],
-        border: { type: 'solid', color: 'D0D5DD', pt: 0.5 },
-        rowH: items.length > 8 ? 0.55 : 0.65,
-        autoPage: true,
-        autoPageRepeatHeader: true,
-        autoPageLineWeight: 0.5,
-      });
-    }
-
-    await prs.writeFile({ fileName: 'Fjord_Roadmap_' + activeQuarter.replace(' ', '_') + '.pptx' });
-  }
-
   function exportRoadmapPdf() {
-    // Gather ALL items for the active quarter (ignore category filter for export)
+    // Gather ALL items across ALL quarters, grouped by category
     const allCategoryItems = {};
-    if (activeQ) {
-      activeQ.sections.forEach(section => {
+    mergedData.forEach(q => {
+      q.sections.forEach(section => {
         if (!allCategoryItems[section.title]) allCategoryItems[section.title] = [];
         section.items.forEach(item => {
-          allCategoryItems[section.title].push({ ...item, sectionTitle: section.title, isCompleted: !!completed[item.id] });
+          allCategoryItems[section.title].push({ ...item, quarter: q.quarter, sectionTitle: section.title, isCompleted: !!completed[item.id] });
         });
       });
-    }
+    });
 
     const categories = ['Operations', 'Marketing', 'Culinary', 'People'];
-    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fjord Roadmap - ${activeQuarter}</title>
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fjord Roadmap</title>
 <style>
 @page { size: landscape; margin: 0.4in; }
 @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page-break { page-break-before: always; } }
-body { font-family: Georgia, serif; margin: 0; padding: 0; color: #1B2A4A; }
-.slide { padding: 20px 30px; min-height: 90vh; position: relative; }
+body { font-family: Garamond, 'EB Garamond', 'Times New Roman', serif; margin: 0; padding: 0; color: #1B2A4A; }
+.slide { padding: 20px 30px; position: relative; }
 .slide-title { font-size: 22px; color: #1B2A4A; margin: 0 0 6px 0; font-weight: normal; }
 .title-line { height: 2px; background: #1B2A4A; margin-bottom: 16px; }
 .footer { position: fixed; bottom: 0; left: 0; right: 0; height: 30px; background: #1B2A4A; }
@@ -1867,6 +1758,7 @@ td.center { text-align: center; }
 .initiative.completed { color: #1a6b3a; }
 .detail { font-size: 9px; color: #445566; }
 .sub { font-size: 8px; color: #6b7a99; margin-top: 2px; }
+.qtr-label { font-size: 8px; color: #6b7a99; }
 .empty { color: #8899aa; font-style: italic; padding: 20px; }
 </style></head><body>`;
 
@@ -1876,9 +1768,9 @@ td.center { text-align: center; }
       html += `<div class="slide-title">${cat} Update</div><div class="title-line"></div>`;
 
       if (items.length === 0) {
-        html += `<div class="empty">No initiatives for this quarter.</div>`;
+        html += `<div class="empty">No initiatives.</div>`;
       } else {
-        html += `<table><thead><tr><th style="width:3%">P</th><th style="width:18%">Initiative</th><th style="width:24%">Details</th><th style="width:8%">Target</th><th style="width:8%">Expected</th><th style="width:9%">Status</th><th style="width:22%">Latest Comment</th><th style="width:8%">Cost</th></tr></thead><tbody>`;
+        html += `<table><thead><tr><th style="width:3%">P</th><th style="width:5%">Qtr</th><th style="width:16%">Initiative</th><th style="width:22%">Details</th><th style="width:7%">Target</th><th style="width:7%">Expected</th><th style="width:8%">Status</th><th style="width:24%">Latest Comment</th><th style="width:8%">Cost</th></tr></thead><tbody>`;
         items.forEach(item => {
           const p = urgency[item.id] ?? item.urgency ?? 2;
           const revised = revisedDates[item.id];
@@ -1897,6 +1789,7 @@ td.center { text-align: center; }
 
           html += `<tr>
             <td class="center p${p}">P${p}</td>
+            <td class="center qtr-label">${item.quarter}</td>
             <td class="initiative${isComplete ? ' completed' : ''}">${item.name.replace(/</g, '&lt;')}</td>
             <td class="detail">${detailHtml}</td>
             <td class="center">${fmtTarget(item.target)}</td>
@@ -2168,11 +2061,6 @@ td.center { text-align: center; }
           <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Update expected dates, add commentary, and mark items complete.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={exportRoadmapPptx}
-            className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
-            style={{background: NAVY, border: '1px solid ' + GOLD_ACCENT}}>
-            Export PowerPoint
-          </button>
           <button onClick={exportRoadmapPdf}
             className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
             style={{background: NAVY, border: '1px solid ' + GOLD_ACCENT}}>
