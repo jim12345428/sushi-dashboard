@@ -231,7 +231,7 @@ function ScenarioModeler({ storeSales }) {
   const [staffRate, setStaffRate] = useState(25);
   const [growthPct, setGrowthPct] = useState(0);
 
-  const BURDEN = 1.25;
+  const BURDEN = 1.14;
 
   const results = useMemo(() => {
     return STORES.map(store => {
@@ -307,7 +307,7 @@ function ScenarioModeler({ storeSales }) {
               className="flex-1" />
             <span className="text-lg font-bold w-14 text-right" style={{color: NAVY}}>${staffRate}/hr</span>
           </div>
-          <div className="text-xs mt-1" style={{color:'#8899aa'}}>+25% burden = ${(staffRate * BURDEN).toFixed(2)}/hr loaded</div>
+          <div className="text-xs mt-1" style={{color:'#8899aa'}}>+14% burden = ${(staffRate * BURDEN).toFixed(2)}/hr loaded</div>
         </div>
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
           <label className="text-xs font-semibold uppercase tracking-wide block mb-2" style={{color:'#6b7a99'}}>YoY Growth Scenario</label>
@@ -645,8 +645,8 @@ function IncomeCalculator() {
             <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{color:'#3a4a8a'}}>Staff Payroll</div>
             <div className="text-sm" style={{color:'#445566'}}>
               {storeVolume >= 400000
-                ? 'Higher-volume stores need a 2-person crew every day. Expect ~$120k/year in staff costs.'
-                : 'Lower-volume stores run solo with coverage for your day off. Expect ~$20k/year in staff costs.'}
+                ? 'Higher-volume stores need a 2-person crew every day. Expect ~$110k/year in staff costs.'
+                : 'Lower-volume stores run solo with coverage for your day off. Expect ~$18k/year in staff costs.'}
             </div>
           </div>
         </div>
@@ -729,26 +729,26 @@ function calcCurrentCosts(storeKey, revenue, concessionCogsRate, convertTempsToS
   if (m.type === 'concession') {
     const operatorPay = revenue * m.pct;
     const opCogs = revenue * concessionCogsRate;
-    const opLabor = additionalStaffHrs(storeKey) * 25 * 52 * 1.25;
+    const opLabor = additionalStaffHrs(storeKey) * 25 * 52 * 1.14;
     const opTakeHome = operatorPay - opCogs - opLabor;
     return { empLabor: 0, tempLabor: 0, labor: operatorPay, cogs: 0, fjord: revenue - operatorPay, opCogs, opLabor, opTakeHome };
   }
   const WEEKS = 52, EMP_RATE = 25, TEMP_DAY = 335;
-  const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.25;
+  const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.14;
   const empAnnual = empWeekly * WEEKS;
   const totalEmpHrs = m.emps * m.empHrs;
   const needed = storePersonHrs(storeKey);
 
   let empLabor, tempLabor;
+  const gapHrs = m.emps === 0 ? 0 : Math.max(0, needed - totalEmpHrs);
+  const tempHrs = m.emps === 0 ? needed : gapHrs;
   if (convertTempsToStaff) {
-    // Replace all temp hours with internal staff at $25/hr + OT + burden
-    // Total person-hours needed, covered by internal employees
-    const totalStaffNeeded = Math.ceil(needed / 50); // each employee does 50 hrs
-    empLabor = totalStaffNeeded * empAnnual;
+    // Replace temp hours at employee loaded rate ($25/hr + 14% burden)
+    const loadedRate = EMP_RATE * 1.14;
+    empLabor = m.emps * empAnnual + tempHrs * loadedRate * WEEKS;
     tempLabor = 0;
   } else {
     empLabor = m.emps * empAnnual;
-    const gapHrs = m.emps === 0 ? 0 : Math.max(0, needed - totalEmpHrs);
     tempLabor = m.emps === 0 ? 7 * TEMP_DAY * WEEKS : gapHrs * (TEMP_DAY / 9) * WEEKS;
   }
   const labor = empLabor + tempLabor;
@@ -770,7 +770,7 @@ function calcProposedPayout(revenue) {
 function calcProposedOperatorCosts(storeKey, revenue, cogsRate) {
   const cogs = revenue * cogsRate;
   const staffHrs = additionalStaffHrs(storeKey);
-  const payroll = staffHrs * 25 * 52 * 1.25;
+  const payroll = staffHrs * 25 * 52 * 1.14;
   return { cogs, payroll };
 }
 
@@ -934,7 +934,7 @@ function ModelComparison({ storeSales }) {
             ['Store hours', '62 hrs/wk (Mon\u2013Sat 9hrs, Sun 8hrs)'],
             ['Crew size', '2 people (high-vol), 1 person (BK/LA)'],
             ['Operator hours', '50 hrs/wk across 6 days'],
-            ['Staff rate', '$25/hr + 25% burden ($31.25 loaded)'],
+            ['Staff rate', '$25/hr + 14% burden ($28.50 loaded)'],
             ['Overtime', '10 hrs/wk @ 1.5x per employee'],
             ['Temp rate (current)', '$335/day ($37.22/hr)'],
             ['Proposed tiers', '62% / 55% / 49% / 43%'],
@@ -958,7 +958,7 @@ function ModelComparison({ storeSales }) {
             <span style={{color: NAVY, fontWeight: 600}}>Convert all temp staffing to internal employees in current model</span>
           </label>
           <span className="text-xs" style={{color:'#8899aa'}}>
-            {convertTemps ? '(temps replaced with $25/hr + OT + burden employees)' : '(using actual temp rates @ $335/day)'}
+            {convertTemps ? '(temps replaced at $25/hr + 14% burden = $28.50/hr loaded)' : '(using actual temp rates @ $335/day = $37.22/hr)'}
           </span>
         </div>
       </div>
@@ -1471,7 +1471,7 @@ export default function Dashboard() {
                     ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a 4-tier structure (62% / 55% / 49% / 43%) with breakpoints at $300k, $500k, and $700k annualized revenue.'],
                     ['Growth Accelerator', 'A tiered bonus on incremental revenue when monthly YoY growth exceeds 5%: 10% on 5-15% growth, 18% on 15-25% growth, 25% on 25%+ growth. Calculated by comparing each calendar month to the same month prior year.'],
                     ['COGS (Cost of Goods Sold)', 'Ingredients, packaging, and supplies. Estimated at 20% of revenue. Paid by the operator from their revenue share.'],
-                    ['Payroll', 'Wages for any additional staff the operator hires, plus ~25% burden (FICA, SUTA/FUTA, workers comp). Paid by the operator from their share.'],
+                    ['Payroll', 'Wages for any additional staff the operator hires, plus ~14% burden (FICA, SUTA/FUTA, workers comp). Paid by the operator from their share.'],
                     ['21-Day Float', 'The lag between when a sale occurs and when the operator receives their payout. Fjord holds funds for 21 days after credit card settlement.'],
                     ['Take-Home', 'What the operator keeps after paying COGS and payroll from their revenue share. This is their personal income.'],
                     ['Fjord Net', 'Revenue retained by Fjord after paying out the operator\'s share. Fjord does NOT pay COGS or payroll — those are the operator\'s responsibility.'],
