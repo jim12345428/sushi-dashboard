@@ -1623,6 +1623,7 @@ function RoadmapTab() {
   const [showSubForm, setShowSubForm] = useState({});
   const [subDraft, setSubDraft] = useState({});
   const [urgency, setUrgency] = useState({}); // { itemId: 1|2|3 }
+  const [completionNotes, setCompletionNotes] = useState({}); // { itemId: string }
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1830,7 +1831,7 @@ function RoadmapTab() {
               })()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold mb-1" style={{color: NAVY, textDecoration: isComplete ? 'line-through' : 'none'}}>{item.name}</div>
+              <div className="text-sm font-semibold mb-1" style={{color: NAVY}}>{item.name}</div>
               <div className="text-xs mt-0.5" style={{color:'#6b7a99'}}>
                 {item.detail}
                 {item.cost != null && item.cost > 0 && (
@@ -2139,27 +2140,37 @@ function RoadmapTab() {
 
       {/* Two-column layout */}
       <div className="flex gap-6">
-        {/* Completed sidebar */}
-        <div className="w-64 flex-shrink-0">
+        {/* Accomplishments */}
+        <div className="w-80 flex-shrink-0">
           <div className="rounded-xl overflow-hidden" style={{border:'1px solid #9dd4b5', background:'#edfaf2'}}>
             <div className="px-4 py-3" style={{background:'#1a6b3a'}}>
-              <div className="text-sm font-bold text-white">Completed ({completedItems.length})</div>
+              <div className="text-sm font-bold text-white">Accomplishments ({completedItems.length})</div>
             </div>
-            <div className="p-3 space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <div className="p-3 space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
               {completedItems.length === 0 && (
-                <div className="text-xs text-center py-4" style={{color:'#8899aa'}}>No completed items yet</div>
+                <div className="text-xs text-center py-6" style={{color:'#8899aa'}}>
+                  Mark items as done to track accomplishments
+                </div>
               )}
               {completedItems.map(item => (
-                <div key={item.id} className="rounded-lg px-3 py-2" style={{background:'white', border:'1px solid #dde4ed'}}>
-                  <div className="flex items-start gap-2">
-                    <input type="checkbox" checked={true}
-                      onChange={() => setCompleted(prev => ({...prev, [item.id]: false}))}
-                      className="w-3 h-3 rounded mt-0.5 flex-shrink-0" />
-                    <div>
-                      <div className="text-xs font-medium line-through" style={{color:'#6b7a99'}}>{item.name}</div>
-                      <div className="text-xs" style={{color:'#8899aa'}}>{item.sectionTitle} &middot; {fmtTarget(item.target)}</div>
-                    </div>
+                <div key={item.id} className="rounded-lg p-3" style={{background:'white', border:'1px solid #dde4ed'}}>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="text-xs font-semibold" style={{color: NAVY}}>{item.name}</div>
+                    <button onClick={() => setCompleted(prev => ({...prev, [item.id]: false}))}
+                      className="text-xs px-1.5 py-0.5 rounded flex-shrink-0"
+                      style={{color:'#6b7a99', background:'#f0f4f8', border:'1px solid #dde4ed'}}
+                      title="Move back to active">
+                      Reopen
+                    </button>
                   </div>
+                  <div className="text-xs mb-2" style={{color:'#8899aa'}}>
+                    {item.sectionTitle} &middot; Target: {fmtTarget(item.target)}
+                  </div>
+                  <textarea value={completionNotes[item.id] || ''} rows={2}
+                    onChange={e => setCompletionNotes(prev => ({...prev, [item.id]: e.target.value}))}
+                    placeholder="Add a note about this accomplishment..."
+                    className="w-full text-xs rounded border px-2 py-1 resize-none"
+                    style={{borderColor:'#9dd4b5', color: NAVY, background:'#fafffe'}} />
                 </div>
               ))}
             </div>
