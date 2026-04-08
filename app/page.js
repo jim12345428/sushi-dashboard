@@ -64,7 +64,7 @@ const NAVY_LIGHT = '#1a2f52';
 const GOLD_ACCENT = '#c9a84c';
 
 /* ── LEDGER BUILDER ── */
-function buildLedger(sales, payrollWeeks, invoices, cogsRate) {
+function buildLedger(sales) {
   const posMap = {};
   sales.forEach(s => posMap[s.date] = s.gross);
 
@@ -116,54 +116,6 @@ function buildLedger(sales, payrollWeeks, invoices, cogsRate) {
       : 0;
   }
 
-  // COGS from invoices
-  const cogsByDay = {};
-  for (const inv of invoices) {
-    if (!inv.windowStart || !inv.windowEnd) continue;
-    const days = [];
-    let cur = new Date(inv.windowStart);
-    const end = new Date(inv.windowEnd);
-    while (cur <= end) {
-      const d = cur.toISOString().split('T')[0];
-      if (posMap[d]) days.push(d);
-      cur.setDate(cur.getDate() + 1);
-    }
-    const windowGross = days.reduce((s, d) => s + posMap[d], 0);
-    if (windowGross > 0) {
-      days.forEach(d => {
-        cogsByDay[d] = (cogsByDay[d] || 0) + inv.totalAmount * (posMap[d] / windowGross);
-      });
-    }
-  }
-
-  // Labor from payroll
-  const laborByDay = {};
-  for (const week of payrollWeeks) {
-    const days = [];
-    let cur = new Date(week.weekStart);
-    const end = new Date(week.weekEnd);
-    while (cur <= end) {
-      const d = cur.toISOString().split('T')[0];
-      if (posMap[d]) days.push(d);
-      cur.setDate(cur.getDate() + 1);
-    }
-    const weekGross = days.reduce((s, d) => s + posMap[d], 0);
-    if (weekGross > 0) {
-      days.forEach(d => {
-        laborByDay[d] = (laborByDay[d] || 0) + week.totalEmployerExpense * (posMap[d] / weekGross);
-      });
-    }
-  }
-
-  // Estimate COGS rate and labor avg from confirmed data
-  const confirmedDates = sortedDates.filter(d => cogsByDay[d] && laborByDay[d]);
-  const rollWindow = confirmedDates.slice(-21);
-  const rollRev   = rollWindow.reduce((s, d) => s + posMap[d], 0);
-  const rollCogs  = rollWindow.reduce((s, d) => s + cogsByDay[d], 0);
-  const rollLabor = rollWindow.reduce((s, d) => s + laborByDay[d], 0);
-  const estCogsRate = rollRev > 0 ? rollCogs / rollRev : cogsRate;
-  const estLaborAvg = rollWindow.length > 0 ? rollLabor / rollWindow.length : 0;
-
   return sortedDates.map(d => {
     const g = posMap[d];
     const ed = new Date(d);
@@ -173,24 +125,12 @@ function buildLedger(sales, payrollWeeks, invoices, cogsRate) {
 
     const baseShare = calcTieredShare(annualized, g);
     const growthBonus = calcGrowthBonusFromRate(g, trailingGrowth);
-    const rev = baseShare + growthBonus;
-
-    const act_cogs  = cogsByDay[d]  ?? null;
-    const act_labor = laborByDay[d] ?? null;
-    const cogs  = act_cogs  !== null ? act_cogs  : g * cogsRate;
-    const labor = act_labor !== null ? act_labor : estLaborAvg;
-    const net   = rev - cogs - labor;
-
-    const cogsAct = act_cogs !== null, laborAct = act_labor !== null;
-    const recon = cogsAct && laborAct ? 'confirmed' : cogsAct || laborAct ? 'partial' : 'estimated';
+    const payout = baseShare + growthBonus;
     const isPaid = pd < TODAY;
-
-    const effectiveRate = g > 0 ? rev / g : 0;
+    const effectiveRate = g > 0 ? payout / g : 0;
 
     return {
-      d, ed, pd, g, rev, baseShare, growthBonus, cogs, labor, net,
-      cogsAct, laborAct, recon,
-      payStatus: isPaid ? 'paid' : recon,
+      d, ed, pd, g, payout, baseShare, growthBonus,
       isPaid,
       dow: DOW[dowIdx(ed)],
       annualized,
@@ -212,10 +152,6 @@ function Badge({ status }) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wide ${styles[status]}`}>{labels[status]}</span>;
 }
 
-function SourceDot({ isActual, isPartial }) {
-  const color = isActual ? 'bg-emerald-500' : isPartial ? 'bg-violet-400' : 'bg-amber-400';
-  return <span className={`inline-block w-1.5 h-1.5 rounded-full ml-1 align-middle ${color}`} />;
-}
 
 function InvoicesTab({ invoices, store }) {
   const [selected, setSelected] = useState(null);
@@ -852,7 +788,6 @@ export default function Dashboard() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [openHistory, setOpenHistory] = useState(null);
-  const [cogsRate, setCogsRate]   = useState(0.20);
 
   useEffect(() => {
     async function load() {
@@ -879,10 +814,8 @@ export default function Dashboard() {
 
   const ledger = useMemo(() => {
     const sales = allSales[store] || [];
-    const payroll = allPayroll[store] || [];
-    const storeInvoices = invoices.filter(inv => inv.store === store);
-    return buildLedger(sales, payroll, storeInvoices, cogsRate);
-  }, [allSales, allPayroll, invoices, store, cogsRate]);
+    return buildLedger(sales);
+  }, [allSales, store]);
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{background:'#f0f4f8'}}>
@@ -906,9 +839,9 @@ export default function Dashboard() {
   const paidRows = ledger.filter(r => r.isPaid);
   const nextRow  = unpaid[0];
   const dOut = r => Math.round((r.pd - TODAY) / 864e5);
-  const s7   = unpaid.filter(r => dOut(r) <= 7).reduce((s,r) => s + r.net, 0);
-  const s14  = unpaid.filter(r => dOut(r) <= 14).reduce((s,r) => s + r.net, 0);
-  const s21  = unpaid.reduce((s,r) => s + r.net, 0);
+  const s7   = unpaid.filter(r => dOut(r) <= 7).reduce((s,r) => s + r.payout, 0);
+  const s14  = unpaid.filter(r => dOut(r) <= 14).reduce((s,r) => s + r.payout, 0);
+  const s21  = unpaid.reduce((s,r) => s + r.payout, 0);
 
   // Current effective rate and trailing growth for sidebar
   const recentDays = ledger.slice(-30);
@@ -985,28 +918,14 @@ export default function Dashboard() {
               </div>
               <div className="space-y-2 mb-6">
                 {[
-                  { label:'Next Payment', val: nextRow ? fmt(nextRow.net) : '-', sub: nextRow ? 'Arriving '+fmtDate(nextRow.pd) : '-', accent: GOLD_ACCENT, bg:'#fdf8ec', border:'#e8d38a' },
+                  { label:'Next Payment', val: nextRow ? fmt(nextRow.payout) : '-', sub: nextRow ? 'Arriving '+fmtDate(nextRow.pd) : '-', accent: GOLD_ACCENT, bg:'#fdf8ec', border:'#e8d38a' },
                   { label:'Next 21 Days', val: fmt(s21), sub: unpaid.length+' payments', accent:'#1a6b8a', bg:'#edf6fb', border:'#b3d9eb' },
-                  { label:'Received To Date', val: fmt(paidRows.reduce((s,r)=>s+r.net,0)), sub: paidRows.length+' deposits', accent:'#1a6b3a', bg:'#edfaf2', border:'#9dd4b5' },
+                  { label:'Received To Date', val: fmt(paidRows.reduce((s,r)=>s+r.payout,0)), sub: paidRows.length+' deposits', accent:'#1a6b3a', bg:'#edfaf2', border:'#9dd4b5' },
                 ].map(k => (
                   <div key={k.label} className="rounded-lg p-3" style={{background:k.bg, border:`1px solid ${k.border}`}}>
                     <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>{k.label}</div>
                     <div className="text-lg font-bold" style={{color:k.accent}}>{k.val}</div>
                     <div className="text-xs mt-0.5" style={{color:'#8899aa'}}>{k.sub}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{color:'#6b7a99'}}>Sources</div>
-              <div className="space-y-1.5 mb-6">
-                {[
-                  {dot:'bg-emerald-500', label:'Confirmed actual'},
-                  {dot:'bg-violet-400',  label:'Partially confirmed'},
-                  {dot:'bg-amber-400',   label:'Estimated'},
-                ].map(s => (
-                  <div key={s.label} className="flex items-center gap-2 text-xs" style={{color:'#8899aa'}}>
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
-                    {s.label}
                   </div>
                 ))}
               </div>
@@ -1018,7 +937,7 @@ export default function Dashboard() {
                 ['Trailing growth', (currentGrowth > 0 ? '+' : '') + pct(currentGrowth)],
                 ['Eff. rate (30d)', pct(avgEffRate)],
                 ['Payment lag', '21 days'],
-                ['COGS estimate', pct(cogsRate)],
+                ['COGS (operator)', '~20%'],
               ].map(([l,v]) => (
                 <div key={l} className="flex justify-between text-xs py-1" style={{color:'#8899aa', borderBottom:'1px solid #eef1f6'}}>
                   <span>{l}</span><strong style={{color: NAVY}}>{v}</strong>
@@ -1228,7 +1147,6 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {unpaid.map((r, i) => {
                   const d = dOut(r);
-                  const nc = r.net >= 0 ? '#1a6b3a' : '#b5282a';
                   return (
                     <div key={r.d} className="rounded-xl flex items-center gap-3 px-4 py-3"
                       style={{background: i===0 ? '#fdf8ec' : 'white', border: i===0 ? `1px solid ${GOLD_ACCENT}` : '1px solid #dde4ed'}}>
@@ -1241,15 +1159,13 @@ export default function Dashboard() {
                       <div className="flex-1 flex items-center gap-2 flex-wrap text-xs" style={{color:'#8899aa'}}>
                         <span>POS <strong style={{color:'#445566'}}>{fmt(r.g)}</strong></span>
                         <span style={{color:'#ccd4e0'}}>&rarr;</span>
-                        <span>Share <strong style={{color:'#1a6b8a'}}>{fmt(r.rev)}</strong>
-                          {r.growthBonus > 0 && <span style={{color:'#1a6b3a'}}> (+{fmt(r.growthBonus)})</span>}
-                        </span>
-                        <span style={{color:'#ccd4e0'}}>&minus;</span>
-                        <span>COGS <strong style={{color:'#8a5c1a'}}>{fmt(r.cogs)}</strong>{!r.cogsAct && <SourceDot />}</span>
-                        <span style={{color:'#ccd4e0'}}>&minus;</span>
-                        <span>Labor <strong style={{color:'#3a4a8a'}}>{fmt(r.labor)}</strong>{!r.laborAct && <SourceDot />}</span>
+                        <span>Base <strong style={{color:'#1a6b8a'}}>{fmt(r.baseShare)}</strong></span>
+                        {r.growthBonus > 0 && <>
+                          <span style={{color:'#ccd4e0'}}>+</span>
+                          <span>Growth <strong style={{color:'#1a6b3a'}}>{fmt(r.growthBonus)}</strong></span>
+                        </>}
                       </div>
-                      <div className="text-xl font-bold w-20 text-right flex-shrink-0" style={{color:nc}}>{fmt(r.net)}</div>
+                      <div className="text-xl font-bold w-24 text-right flex-shrink-0" style={{color:'#1a6b3a'}}>{fmt(r.payout)}</div>
                     </div>
                   );
                 })}
@@ -1262,63 +1178,52 @@ export default function Dashboard() {
             <div>
               <div className="mb-5">
                 <h1 className="text-xl font-bold" style={{color: NAVY}}>Daily Ledger &mdash; {STORE_LABELS[store]}</h1>
-                <p className="text-sm mt-1" style={{color:'#6b7a99'}}>{ledger.length} days &middot; tiered share &middot; costs &middot; net &middot; pay date</p>
+                <p className="text-sm mt-1" style={{color:'#6b7a99'}}>{ledger.length} days &middot; your daily payout from Fjord</p>
               </div>
               <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-[960px]">
+                  <table className="w-full text-xs min-w-[700px]">
                     <thead>
                       <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
                         <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Day</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>POS Revenue</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Base Share</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edf6fb'}}>Growth</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Eff %</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #e8e0d0'}}>COGS</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Labor</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edfaf2', borderLeft:'2px solid #9dd4b5'}}>Net</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edfaf2'}}>Paid On</th>
+                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>POS Revenue</th>
+                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Base Share</th>
+                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edf6fb'}}>Growth Bonus</th>
+                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb'}}>Eff %</th>
+                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edfaf2', borderLeft:'2px solid #9dd4b5'}}>Your Payout</th>
+                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edfaf2'}}>Pay Date</th>
                         <th className="text-center px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edfaf2'}}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...ledger].reverse().map(r => {
-                        const nc = r.net >= 0 ? '#1a6b3a' : '#b5282a';
-                        return (
-                          <tr key={r.d} className="hover:bg-blue-50/30 transition-colors"
-                            style={{borderBottom:'1px solid #eef1f6', opacity: r.isPaid ? 0.55 : 1}}>
-                            <td className="px-4 py-2.5 font-semibold whitespace-nowrap" style={{color: NAVY}}>
-                              {fmtDate(r.ed)}<span className="ml-2 font-normal" style={{color:'#8899aa'}}>{r.dow}</span>
-                            </td>
-                            <td className="px-4 py-2.5 text-right" style={{color:'#445566', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmtD(r.g)}</td>
-                            <td className="px-4 py-2.5 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmtD(r.baseShare)}</td>
-                            <td className="px-4 py-2.5 text-right" style={{color: r.growthBonus > 0 ? '#1a6b3a' : '#ccd4e0', background:'rgba(237,246,251,0.4)'}}>
-                              {r.growthBonus > 0 ? '+' + fmtD(r.growthBonus) : '-'}
-                            </td>
-                            <td className="px-4 py-2.5 text-right" style={{color:'#8899aa'}}>{pct(r.effectiveRate)}</td>
-                            <td className="px-4 py-2.5 text-right" style={{borderLeft:'2px solid #f0ece0'}}>
-                              <span style={{color:'#8a5c1a'}}>{fmtD(r.cogs)}</span><SourceDot isActual={r.cogsAct} />
-                            </td>
-                            <td className="px-4 py-2.5 text-right">
-                              <span style={{color:'#3a4a8a'}}>{fmtD(r.labor)}</span><SourceDot isActual={r.laborAct} isPartial={r.recon==='partial'} />
-                            </td>
-                            <td className="px-4 py-2.5 text-right font-bold text-base" style={{color:nc, background:'rgba(237,250,242,0.4)', borderLeft:'2px solid #c8edda'}}>{fmt(r.net)}</td>
-                            <td className="px-4 py-2.5 text-right whitespace-nowrap" style={{color: r.isPaid ? '#1a6b3a' : NAVY, background:'rgba(237,250,242,0.4)', fontWeight: r.isPaid ? 600 : 400}}>{fmtDate(r.pd)}</td>
-                            <td className="px-4 py-2.5 text-center" style={{background:'rgba(237,250,242,0.4)'}}><Badge status={r.payStatus} /></td>
-                          </tr>
-                        );
-                      })}
+                      {[...ledger].reverse().map(r => (
+                        <tr key={r.d} className="hover:bg-blue-50/30 transition-colors"
+                          style={{borderBottom:'1px solid #eef1f6', opacity: r.isPaid ? 0.55 : 1}}>
+                          <td className="px-4 py-2.5 font-semibold whitespace-nowrap" style={{color: NAVY}}>
+                            {fmtDate(r.ed)}<span className="ml-2 font-normal" style={{color:'#8899aa'}}>{r.dow}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right" style={{color:'#445566'}}>{fmtD(r.g)}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmtD(r.baseShare)}</td>
+                          <td className="px-4 py-2.5 text-right" style={{color: r.growthBonus > 0 ? '#1a6b3a' : '#ccd4e0', background:'rgba(237,246,251,0.4)'}}>
+                            {r.growthBonus > 0 ? '+' + fmtD(r.growthBonus) : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-right" style={{color:'#8899aa', background:'rgba(237,246,251,0.4)'}}>{pct(r.effectiveRate)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-base" style={{color:'#1a6b3a', background:'rgba(237,250,242,0.4)', borderLeft:'2px solid #c8edda'}}>{fmt(r.payout)}</td>
+                          <td className="px-4 py-2.5 text-right whitespace-nowrap" style={{color: r.isPaid ? '#1a6b3a' : NAVY, background:'rgba(237,250,242,0.4)', fontWeight: r.isPaid ? 600 : 400}}>{fmtDate(r.pd)}</td>
+                          <td className="px-4 py-2.5 text-center" style={{background:'rgba(237,250,242,0.4)'}}>
+                            <Badge status={r.isPaid ? 'paid' : 'estimated'} />
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                     <tfoot>
                       <tr style={{background:'#f0f4f8', borderTop:`2px solid ${NAVY}`}}>
                         <td className="px-4 py-3 text-xs font-bold uppercase tracking-wide" style={{color:'#6b7a99'}}>Total</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}>{fmt(ledger.reduce((s,r)=>s+r.g,0))}</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(ledger.reduce((s,r)=>s+r.baseShare,0))}</td>
+                        <td className="px-4 py-3 text-right font-bold" style={{color:'#445566'}}>{fmt(ledger.reduce((s,r)=>s+r.g,0))}</td>
+                        <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}>{fmt(ledger.reduce((s,r)=>s+r.baseShare,0))}</td>
                         <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(237,246,251,0.6)'}}>{fmt(ledger.reduce((s,r)=>s+r.growthBonus,0))}</td>
-                        <td className="px-4 py-3 text-right" style={{color:'#8899aa'}}>{pct(avgEffRate)}</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{color:'#8a5c1a', borderLeft:'2px solid #e8e0d0'}}>{fmt(ledger.reduce((s,r)=>s+r.cogs,0))}</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{color:'#3a4a8a'}}>{fmt(ledger.reduce((s,r)=>s+r.labor,0))}</td>
-                        <td className="px-4 py-3 text-right font-bold text-base" style={{color:'#1a6b3a', background:'rgba(237,250,242,0.6)', borderLeft:'2px solid #9dd4b5'}}>{fmt(ledger.reduce((s,r)=>s+r.net,0))}</td>
+                        <td className="px-4 py-3 text-right" style={{color:'#8899aa', background:'rgba(237,246,251,0.6)'}}>{pct(avgEffRate)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-base" style={{color:'#1a6b3a', background:'rgba(237,250,242,0.6)', borderLeft:'2px solid #9dd4b5'}}>{fmt(ledger.reduce((s,r)=>s+r.payout,0))}</td>
                         <td colSpan={2} style={{background:'rgba(237,250,242,0.6)'}} />
                       </tr>
                     </tfoot>
@@ -1337,10 +1242,9 @@ export default function Dashboard() {
               </div>
               <div className="grid grid-cols-4 gap-4 mb-5">
                 {[
-                  ['POS Revenue',      fmt(paidRows.reduce((s,r)=>s+r.g,0)),   '#445566', '#f7f9fc', '#dde4ed'],
-                  ['Your Share',       fmt(paidRows.reduce((s,r)=>s+r.rev,0)), '#1a6b8a', '#edf6fb', '#b3d9eb'],
-                  ['Total Received',   fmt(paidRows.reduce((s,r)=>s+r.net,0)), '#1a6b3a', '#edfaf2', '#9dd4b5'],
-                  ['Payments Made',    paidRows.length,                         NAVY,      '#f0f4f8', '#c8d4e4'],
+                  ['POS Revenue',      fmt(paidRows.reduce((s,r)=>s+r.g,0)),      '#445566', '#f7f9fc', '#dde4ed'],
+                  ['Total Paid Out',   fmt(paidRows.reduce((s,r)=>s+r.payout,0)), '#1a6b3a', '#edfaf2', '#9dd4b5'],
+                  ['Payments Made',    paidRows.length,                            NAVY,      '#f0f4f8', '#c8d4e4'],
                 ].map(([label,val,color,bg,border]) => (
                   <div key={label} className="rounded-xl p-4" style={{background:bg, border:`1px solid ${border}`}}>
                     <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>{label}</div>
@@ -1351,7 +1255,6 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {[...paidRows].reverse().map((r, i) => {
                   const isOpen = openHistory === i;
-                  const nc = r.net >= 0 ? '#1a6b3a' : '#b5282a';
                   return (
                     <div key={r.d} className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed'}}>
                       <div className="flex items-center px-4 py-3 gap-3 cursor-pointer hover:bg-blue-50/30"
@@ -1363,21 +1266,18 @@ export default function Dashboard() {
                         </div>
                         <div className="text-xs w-20 flex-shrink-0" style={{color:'#8899aa'}}>for {fmtDate(r.ed)}</div>
                         <div className="text-xs flex-shrink-0" style={{color:'#8899aa'}}>POS <strong style={{color:'#445566'}}>{fmt(r.g)}</strong></div>
-                        <div className="text-xs w-32 flex-shrink-0">share <strong style={{color:'#1a6b8a'}}>{fmt(r.rev)}</strong></div>
-                        <div className="flex-1 text-xl font-bold" style={{color:nc}}>{fmt(r.net)}</div>
+                        <div className="flex-1 text-xl font-bold" style={{color:'#1a6b3a'}}>{fmt(r.payout)}</div>
                         <Badge status="paid" />
                         <span className="ml-2 text-sm" style={{color:'#8899aa'}}>{isOpen ? '\u2191' : '\u203A'}</span>
                       </div>
                       {isOpen && (
                         <div style={{background:'#f7f9fc', borderTop:'1px solid #dde4ed'}} className="px-4 py-4">
-                          <div className="grid grid-cols-6 gap-3">
+                          <div className="grid grid-cols-4 gap-3">
                             {[
                               ['POS Revenue',  fmtD(r.g),          '#445566',  'POS'],
                               ['Base Share',   fmtD(r.baseShare),  '#1a6b8a',  pct(r.effectiveRate) + ' eff.'],
-                              ['Growth Bonus', r.growthBonus > 0 ? '+' + fmtD(r.growthBonus) : '-', r.growthBonus > 0 ? '#1a6b3a' : '#8899aa', 'YoY accel.'],
-                              ['COGS',         fmtD(r.cogs),       '#8a5c1a',  r.cogsAct ? 'Ottimate' : 'Estimated'],
-                              ['Labor',        fmtD(r.labor),      '#3a4a8a',  r.laborAct ? 'ADP' : 'Estimated'],
-                              ['Net Paid',     fmt(r.net),         r.net>=0?'#1a6b3a':'#b5282a', 'ACH confirmed'],
+                              ['Growth Bonus', r.growthBonus > 0 ? '+' + fmtD(r.growthBonus) : '-', r.growthBonus > 0 ? '#1a6b3a' : '#8899aa', pct(r.trailingGrowth) + ' trailing YoY'],
+                              ['Your Payout',  fmt(r.payout),      '#1a6b3a',  'ACH deposit'],
                             ].map(([label,val,color,source]) => (
                               <div key={label} className="rounded-lg p-3" style={{background:'white', border:'1px solid #dde4ed'}}>
                                 <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>{label}</div>
