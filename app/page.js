@@ -825,7 +825,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['upcoming','Upcoming Payments'],['ledger','Daily Ledger'],['history','Payment History'],['invoices','Invoices'],['modeler','Scenario Modeler'],['recruit','Job Opportunity'],['income','Income Calculator']].map(([id,label]) => (
+        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -1100,66 +1100,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* LEDGER */}
-          {tab === 'ledger' && (
-            <div>
-              <div className="mb-5">
-                <h1 className="text-xl font-bold" style={{color: NAVY}}>Daily Ledger &mdash; {STORE_LABELS[store]}</h1>
-                <p className="text-sm mt-1" style={{color:'#6b7a99'}}>{ledger.length} days &middot; your daily payout from Fjord</p>
-              </div>
-              <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-[700px]">
-                    <thead>
-                      <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
-                        <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Day</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>POS Revenue</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Base Share</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edf6fb'}}>Growth Bonus</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb'}}>Eff %</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edfaf2', borderLeft:'2px solid #9dd4b5'}}>Your Payout</th>
-                        <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edfaf2'}}>Pay Date</th>
-                        <th className="text-center px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edfaf2'}}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...ledger].reverse().map(r => (
-                        <tr key={r.d} className="hover:bg-blue-50/30 transition-colors"
-                          style={{borderBottom:'1px solid #eef1f6', opacity: r.isPaid ? 0.55 : 1}}>
-                          <td className="px-4 py-2.5 font-semibold whitespace-nowrap" style={{color: NAVY}}>
-                            {fmtDate(r.ed)}<span className="ml-2 font-normal" style={{color:'#8899aa'}}>{r.dow}</span>
-                          </td>
-                          <td className="px-4 py-2.5 text-right" style={{color:'#445566'}}>{fmtD(r.g)}</td>
-                          <td className="px-4 py-2.5 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmtD(r.baseShare)}</td>
-                          <td className="px-4 py-2.5 text-right" style={{color: r.growthBonus > 0 ? '#1a6b3a' : '#ccd4e0', background:'rgba(237,246,251,0.4)'}}>
-                            {r.growthBonus > 0 ? '+' + fmtD(r.growthBonus) : '-'}
-                          </td>
-                          <td className="px-4 py-2.5 text-right" style={{color:'#8899aa', background:'rgba(237,246,251,0.4)'}}>{pct(r.effectiveRate)}</td>
-                          <td className="px-4 py-2.5 text-right font-bold text-base" style={{color:'#1a6b3a', background:'rgba(237,250,242,0.4)', borderLeft:'2px solid #c8edda'}}>{fmt(r.payout)}</td>
-                          <td className="px-4 py-2.5 text-right whitespace-nowrap" style={{color: r.isPaid ? '#1a6b3a' : NAVY, background:'rgba(237,250,242,0.4)', fontWeight: r.isPaid ? 600 : 400}}>{fmtDate(r.pd)}</td>
-                          <td className="px-4 py-2.5 text-center" style={{background:'rgba(237,250,242,0.4)'}}>
-                            <Badge status={r.isPaid ? 'paid' : 'estimated'} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{background:'#f0f4f8', borderTop:`2px solid ${NAVY}`}}>
-                        <td className="px-4 py-3 text-xs font-bold uppercase tracking-wide" style={{color:'#6b7a99'}}>Total</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{color:'#445566'}}>{fmt(ledger.reduce((s,r)=>s+r.g,0))}</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}>{fmt(ledger.reduce((s,r)=>s+r.baseShare,0))}</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(237,246,251,0.6)'}}>{fmt(ledger.reduce((s,r)=>s+r.growthBonus,0))}</td>
-                        <td className="px-4 py-3 text-right" style={{color:'#8899aa', background:'rgba(237,246,251,0.6)'}}>{pct(avgEffRate)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-base" style={{color:'#1a6b3a', background:'rgba(237,250,242,0.6)', borderLeft:'2px solid #9dd4b5'}}>{fmt(ledger.reduce((s,r)=>s+r.payout,0))}</td>
-                        <td colSpan={2} style={{background:'rgba(237,250,242,0.6)'}} />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* HISTORY */}
           {tab === 'history' && (
             <div>
@@ -1223,17 +1163,6 @@ export default function Dashboard() {
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {/* INVOICES */}
-          {tab === 'invoices' && (
-            <div>
-              <div className="mb-5">
-                <h1 className="text-xl font-bold" style={{color: NAVY}}>Invoices &mdash; {STORE_LABELS[store]}</h1>
-                <p className="text-sm mt-1" style={{color:'#6b7a99'}}>Supplier invoices for {STORE_LABELS[store]}</p>
-              </div>
-              <InvoicesTab invoices={invoices} store={store} />
             </div>
           )}
 
