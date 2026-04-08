@@ -1619,9 +1619,11 @@ function RoadmapTab() {
   const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '' });
   const [activeQuarter, setActiveQuarter] = useState('Q1 2026');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [subItems, setSubItems] = useState({}); // { parentId: [{ id, name, status }] }
-  const [showSubForm, setShowSubForm] = useState({}); // { parentId: bool }
-  const [subDraft, setSubDraft] = useState({}); // { parentId: string }
+  const [subItems, setSubItems] = useState({});
+  const [showSubForm, setShowSubForm] = useState({});
+  const [subDraft, setSubDraft] = useState({});
+  const [weeklyComments, setWeeklyComments] = useState([]); // [{ text, date, quarter }]
+  const [weeklyDraft, setWeeklyDraft] = useState('');
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1722,6 +1724,83 @@ function RoadmapTab() {
       ...prev,
       [parentId]: (prev[parentId] || []).map(s => s.id === subId ? { ...s, done: !s.done } : s),
     }));
+  }
+
+  function postWeeklyComment() {
+    if (!weeklyDraft.trim()) return;
+    setWeeklyComments(prev => [...prev, {
+      text: weeklyDraft.trim(),
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      timestamp: Date.now(),
+      quarter: activeQuarter,
+    }]);
+    setWeeklyDraft('');
+  }
+
+  async function exportRoadmapPptx() {
+    const pptxgen = (await import('pptxgenjs')).default;
+    const prs = new pptxgen();
+    prs.layout = 'LAYOUT_WIDE';
+    const navy = '0f1f3d', gold = 'c9a84c', white = 'FFFFFF', green = '1a6b3a';
+    const hdr = { color: white, fill: { color: navy }, bold: true, fontSize: 9, align: 'center' };
+    const cell = { fontSize: 8, align: 'left', border: { type: 'solid', color: 'dde4ed', pt: 0.5 }, valign: 'top' };
+
+    // Title slide
+    let slide = prs.addSlide();
+    slide.background = { color: navy };
+    slide.addText('Fjord Fish Market', { x: 0.8, y: 1.5, fontSize: 16, color: gold });
+    slide.addText('Operational Roadmap \u2014 ' + activeQuarter, { x: 0.8, y: 2.2, fontSize: 32, color: white, bold: true });
+    slide.addText('Board Update \u2014 ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), { x: 0.8, y: 3.5, fontSize: 14, color: '8899aa' });
+
+    // Weekly commentary slide (if any)
+    const qComments = weeklyComments.filter(c => c.quarter === activeQuarter);
+    if (qComments.length > 0) {
+      slide = prs.addSlide();
+      slide.addText('Weekly Commentary', { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: navy });
+      qComments.slice(-5).forEach((c, i) => {
+        slide.addText(c.date, { x: 0.5, y: 1.0 + i * 0.9, fontSize: 9, bold: true, color: '6b7a99' });
+        slide.addText(c.text, { x: 0.5, y: 1.3 + i * 0.9, w: 12, fontSize: 11, color: '445566' });
+      });
+    }
+
+    // Active items by section
+    const sections = Object.entries(activeSections);
+    for (const [title, items] of sections) {
+      slide = prs.addSlide();
+      slide.addText(title + ' \u2014 Active Initiatives', { x: 0.5, y: 0.3, fontSize: 20, bold: true, color: navy });
+      const rows = [[
+        { text: 'Initiative', options: hdr },
+        { text: 'Target', options: hdr },
+        { text: 'Expected', options: hdr },
+        { text: 'Timeline', options: hdr },
+        { text: 'Latest Update', options: hdr },
+      ]];
+      items.forEach(item => {
+        const revised = revisedDates[item.id];
+        const tl = getTimeline(item);
+        const latest = (comments[item.id] || []).slice(-1)[0];
+        rows.push([
+          { text: item.name, options: { ...cell, bold: true } },
+          { text: fmtTarget(item.target), options: cell },
+          { text: revised ? fmtTarget(revised) : '-', options: cell },
+          { text: tl ? tl.label : '-', options: { ...cell, color: tl ? (tl.color === '#1a6b3a' ? green : tl.color === '#b5282a' ? 'b5282a' : '8a5c1a') : '999999' } },
+          { text: latest ? latest.text : '-', options: { ...cell, fontSize: 7 } },
+        ]);
+      });
+      slide.addTable(rows, { x: 0.3, y: 0.9, w: 12.5, colW: [3.5, 1.5, 1.5, 1.5, 4.5], border: { type: 'solid', color: 'dde4ed', pt: 0.5 }, autoPage: true });
+    }
+
+    // Completed slide
+    if (completedItems.length > 0) {
+      slide = prs.addSlide();
+      slide.addText('Completed \u2014 ' + activeQuarter, { x: 0.5, y: 0.3, fontSize: 20, bold: true, color: green });
+      completedItems.forEach((item, i) => {
+        slide.addText('\u2713 ' + item.name, { x: 0.7, y: 0.9 + i * 0.4, fontSize: 11, color: green, w: 6 });
+        slide.addText(item.sectionTitle + ' \u2014 Target: ' + fmtTarget(item.target), { x: 7, y: 0.9 + i * 0.4, fontSize: 9, color: '8899aa', w: 5 });
+      });
+    }
+
+    await prs.writeFile({ fileName: 'Fjord_Roadmap_' + activeQuarter.replace(' ', '_') + '.pptx' });
   }
 
   function fmtTarget(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
@@ -1963,11 +2042,18 @@ function RoadmapTab() {
           <h1 className="text-2xl font-bold" style={{color: NAVY}}>Operational Roadmap</h1>
           <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Update expected dates, add commentary, and mark items complete.</p>
         </div>
-        <button onClick={() => setShowAddForm(!showAddForm)}
-          className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
-          style={{background: showAddForm ? '#6b7a99' : NAVY, border: '1px solid ' + GOLD_ACCENT}}>
-          {showAddForm ? 'Cancel' : '+ Add Initiative'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportRoadmapPptx}
+            className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
+            style={{background: NAVY, border: '1px solid ' + GOLD_ACCENT}}>
+            Export PowerPoint
+          </button>
+          <button onClick={() => setShowAddForm(!showAddForm)}
+            className="px-4 py-2 rounded-lg text-xs font-semibold text-white"
+            style={{background: showAddForm ? '#6b7a99' : NAVY, border: '1px solid ' + GOLD_ACCENT}}>
+            {showAddForm ? 'Cancel' : '+ Add Initiative'}
+          </button>
+        </div>
       </div>
 
       {/* Add Initiative Form */}
@@ -2053,6 +2139,41 @@ function RoadmapTab() {
           <option value="All">All Categories</option>
           {ROADMAP_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+      </div>
+
+      {/* Weekly Commentary */}
+      <div className="rounded-xl mb-6 overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <div className="px-4 py-3 flex items-center justify-between" style={{background: NAVY}}>
+          <div className="text-sm font-bold text-white">Weekly Commentary &mdash; {activeQuarter}</div>
+          <div className="text-xs" style={{color:'rgba(255,255,255,0.4)'}}>
+            {weeklyComments.filter(c => c.quarter === activeQuarter).length} updates
+          </div>
+        </div>
+        <div className="p-4">
+          {/* Previous weekly comments */}
+          {weeklyComments.filter(c => c.quarter === activeQuarter).length > 0 && (
+            <div className="space-y-3 mb-4">
+              {weeklyComments.filter(c => c.quarter === activeQuarter).map((c, i) => (
+                <div key={i} className="flex gap-3 text-sm py-2" style={{borderBottom:'1px solid #eef1f6'}}>
+                  <div className="flex-shrink-0 w-24 text-xs font-medium" style={{color:'#6b7a99'}}>{c.date}</div>
+                  <div style={{color:'#445566'}}>{c.text}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* New weekly comment */}
+          <div className="flex gap-2">
+            <textarea value={weeklyDraft} rows={2} placeholder="How was the week? What should the board know?"
+              onChange={e => setWeeklyDraft(e.target.value)}
+              className="flex-1 text-sm rounded-lg border px-3 py-2 resize-none"
+              style={{borderColor:'#dde4ed', color: NAVY}} />
+            <button onClick={postWeeklyComment} disabled={!weeklyDraft.trim()}
+              className="px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40 self-end"
+              style={{background: NAVY}}>
+              Post
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Two-column layout */}
