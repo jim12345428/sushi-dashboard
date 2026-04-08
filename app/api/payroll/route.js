@@ -3,8 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
 
-const TARGET_STORE = 'cos cob';
-const TARGET_DEPT  = 'sushi';
+const TARGET_DEPT = 'sushi';
 
 function normalizeStore(name) {
   return name?.toString().toLowerCase()
@@ -19,26 +18,20 @@ function parseExcelDate(d) {
 
 export async function GET() {
   const payrollDir = path.join(process.cwd(), 'data', 'payroll');
-  console.log('CWD:', process.cwd());
-  console.log('Looking in:', payrollDir);
-  console.log('Exists:', fs.existsSync(payrollDir));
 
   if (!fs.existsSync(payrollDir)) {
-    return NextResponse.json({ weeks: [] });
+    return NextResponse.json({ weeks: {} });
   }
 
   const files = fs.readdirSync(payrollDir)
     .filter(f => f.toLowerCase().endsWith('.xlsx') || f.toLowerCase().endsWith('.xls'))
     .sort();
 
-  console.log('Files found:', files);
-
-  const weeks = [];
+  const storeWeeks = {};
 
   for (const filename of files) {
     try {
       const filepath = path.join(process.cwd(), 'data', 'payroll', filename);
-      console.log('Reading:', filepath);
       const fileBuffer = fs.readFileSync(filepath);
       const wb = XLSX.read(fileBuffer, { type: 'buffer' });
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -52,35 +45,28 @@ export async function GET() {
         expense: headers.indexOf('Total Employer Expense'),
       };
 
-      console.log('Indexes:', idx);
+      if (idx.store < 0 || idx.expense < 0) continue;
 
-      if (idx.store < 0 || idx.expense < 0) {
-        console.warn(`${filename}: missing expected columns`);
-        continue;
-      }
-
-      let total = 0;
-      let payDate = null;
-
+      const byStoreDate = {};
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         const store = normalizeStore(row[idx.store]?.toString());
         const dept  = row[idx.dept]?.toString().trim().toLowerCase();
-        if (store !== TARGET_STORE) continue;
         if (dept !== TARGET_DEPT) continue;
 
         const exp = parseFloat(row[idx.expense]);
-        if (!isNaN(exp)) total += exp;
+        if (isNaN(exp)) continue;
 
-        if (!payDate) {
-          payDate = parseExcelDate(row[idx.payDate]);
-        }
+        const payDate = row[idx.payDate] ? parseExcelDate(row[idx.payDate]) : null;
+        if (!payDate || isNaN(payDate.getTime())) continue;
+
+        const key = store + '|' + payDate.toISOString();
+        if (!byStoreDate[key]) byStoreDate[key] = { store, payDate, total: 0 };
+        byStoreDate[key].total += exp;
       }
 
-      console.log('Total:', total, 'PayDate:', payDate);
-
-      if (total > 0 && payDate) {
-        const pd = new Date(payDate);
+      for (const entry of Object.values(byStoreDate)) {
+        const pd = new Date(entry.payDate);
         const dayOfWeek = pd.getDay();
         const diffToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
         const weekStart = new Date(pd);
@@ -88,12 +74,13 @@ export async function GET() {
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
 
-        weeks.push({
+        if (!storeWeeks[entry.store]) storeWeeks[entry.store] = [];
+        storeWeeks[entry.store].push({
           filename,
           payDate:              pd.toISOString().split('T')[0],
           weekStart:            weekStart.toISOString().split('T')[0],
           weekEnd:              weekEnd.toISOString().split('T')[0],
-          totalEmployerExpense: Math.round(total * 100) / 100,
+          totalEmployerExpense: Math.round(entry.total * 100) / 100,
         });
       }
     } catch(e) {
@@ -101,5 +88,5 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ weeks });
+  return NextResponse.json({ weeks: storeWeeks });
 }

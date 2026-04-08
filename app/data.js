@@ -1,9 +1,18 @@
-export const STORE_NAME = 'cos cob';
+export const STORES = ['brooklyn', 'cos cob', 'darien', 'larchmont', 'new canaan', 'westport'];
+
+export const STORE_LABELS = {
+  'brooklyn': 'Brooklyn',
+  'cos cob': 'Cos Cob',
+  'darien': 'Darien',
+  'larchmont': 'Larchmont',
+  'new canaan': 'New Canaan',
+  'westport': 'Westport',
+};
 
 export async function loadSales() {
   const res = await fetch('/api/sales');
-  const { sales } = await res.json();
-  return sales;
+  const { stores } = await res.json();
+  return stores;
 }
 
 export async function loadPayroll() {

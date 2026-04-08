@@ -3,13 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
 
-const STORE_NAME = 'cos cob';
-
 export async function GET() {
   const filepath = path.join(process.cwd(), 'data', 'sales', 'sales.xlsx');
 
   if (!fs.existsSync(filepath)) {
-    return NextResponse.json({ sales: [] });
+    return NextResponse.json({ stores: {} });
   }
 
   try {
@@ -21,17 +19,27 @@ export async function GET() {
     const headerIdx = rows.findIndex(r =>
       r.some(c => c?.toString().toLowerCase() === 'date')
     );
-    if (headerIdx < 0) return NextResponse.json({ sales: [] });
+    if (headerIdx < 0) return NextResponse.json({ stores: {} });
 
     const headers = rows[headerIdx].map(h => h?.toString().trim().toLowerCase() || '');
-    const storeCol = headers.findIndex(h => h === STORE_NAME);
-    if (storeCol < 0) return NextResponse.json({ sales: [] });
 
-    const sales = [];
+    // Find all store columns (skip 'date' and 'grand total')
+    const storeCols = [];
+    for (let c = 1; c < headers.length; c++) {
+      if (headers[c] && headers[c] !== 'grand total') {
+        storeCols.push({ idx: c, name: headers[c] });
+      }
+    }
+
+    const stores = {};
+    for (const sc of storeCols) {
+      stores[sc.name] = [];
+    }
+
     for (let i = headerIdx + 1; i < rows.length; i++) {
       const row = rows[i];
       const dateVal = row[0];
-      if (!dateVal) continue;
+      if (!dateVal || dateVal.toString().toLowerCase().includes('grand total')) continue;
 
       let date;
       if (typeof dateVal === 'number') {
@@ -41,18 +49,21 @@ export async function GET() {
       }
       if (isNaN(date.getTime())) continue;
 
-      const gross = parseFloat(row[storeCol]);
-      if (isNaN(gross) || gross <= 0) continue;
+      const dateStr = date.toISOString().split('T')[0];
 
-      sales.push({
-        date:  date.toISOString().split('T')[0],
-        gross: Math.round(gross * 100) / 100,
-      });
+      for (const sc of storeCols) {
+        const gross = parseFloat(row[sc.idx]);
+        if (isNaN(gross) || gross <= 0) continue;
+        stores[sc.name].push({
+          date: dateStr,
+          gross: Math.round(gross * 100) / 100,
+        });
+      }
     }
 
-    return NextResponse.json({ sales });
+    return NextResponse.json({ stores });
   } catch(e) {
     console.error('Error reading sales file:', e.message);
-    return NextResponse.json({ sales: [] });
+    return NextResponse.json({ stores: {} });
   }
 }
