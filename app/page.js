@@ -1738,6 +1738,51 @@ function RoadmapTab() {
       });
     });
 
+    const esc = s => (s || '').replace(/</g, '&lt;');
+
+    function buildItemRow(item) {
+      const p = urgency[item.id] ?? item.urgency ?? 2;
+      const revised = revisedDates[item.id];
+      const tl = getTimeline(item);
+      const allComments = comments[item.id] || [];
+      const subs = subItems[item.id] || [];
+      const isComplete = item.isCompleted;
+
+      let detailHtml = esc(item.detail) || '-';
+      if (subs.length > 0) {
+        detailHtml += '<div class="sub">' + subs.map(s => (s.done ? '\u2713 ' : '\u25CB ') + esc(s.name)).join('<br>') + '</div>';
+      }
+
+      let statusText = isComplete ? '\u2713 Done' : (tl ? tl.label : '-');
+      const statusClass = isComplete ? 'done' : (tl ? (tl.color === '#b5282a' ? 'late' : tl.color === '#1a6b3a' ? 'done' : 'behind') : '');
+
+      // Full comment history
+      let commentHtml = '-';
+      if (allComments.length > 0) {
+        commentHtml = allComments.map(c => {
+          let line = '<div class="comment-entry"><span class="comment-date">' + esc(c.date) + '</span>';
+          if (c.expectedDate) line += ' <span class="comment-exp">Exp: ' + fmtTarget(c.expectedDate) + '</span>';
+          if (c.noChange) line += ' <span class="comment-nc">[No change]</span>';
+          line += '<br>' + esc(c.text) + '</div>';
+          return line;
+        }).join('');
+      }
+
+      return `<tr>
+        <td class="center p${p}">P${p}</td>
+        <td class="center qtr-label">${esc(item.quarter)}</td>
+        <td class="initiative${isComplete ? ' completed' : ''}">${esc(item.name)}</td>
+        <td class="detail">${detailHtml}</td>
+        <td class="center">${fmtTarget(item.target)}</td>
+        <td class="center">${revised ? fmtTarget(revised) : '-'}</td>
+        <td class="center ${statusClass}">${statusText}</td>
+        <td class="comment-col">${commentHtml}</td>
+        <td class="center">${item.cost ? fmt(item.cost) : '-'}</td>
+      </tr>`;
+    }
+
+    const tblHead = `<table><thead><tr><th style="width:3%">P</th><th style="width:4%">Qtr</th><th style="width:14%">Initiative</th><th style="width:17%">Details</th><th style="width:6%">Target</th><th style="width:6%">Expected</th><th style="width:7%">Status</th><th style="width:35%">Comment History</th><th style="width:8%">Cost</th></tr></thead><tbody>`;
+
     const categories = ['Operations', 'Marketing', 'Culinary', 'People'];
     let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fjord Roadmap</title>
 <style>
@@ -1747,59 +1792,53 @@ body { font-family: Garamond, 'EB Garamond', 'Times New Roman', serif; margin: 0
 .slide { padding: 20px 30px; position: relative; }
 .slide-title { font-size: 22px; color: #1B2A4A; margin: 0 0 6px 0; font-weight: normal; }
 .title-line { height: 2px; background: #1B2A4A; margin-bottom: 16px; }
+.section-label { font-size: 13px; color: #1B2A4A; font-weight: bold; margin: 14px 0 6px 0; }
+.completed-label { font-size: 13px; color: #1a6b3a; font-weight: bold; margin: 18px 0 6px 0; border-top: 1px solid #D0D5DD; padding-top: 10px; }
 .footer { position: fixed; bottom: 0; left: 0; right: 0; height: 30px; background: #1B2A4A; }
-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-th { background: #1B2A4A; color: white; padding: 6px 8px; font-size: 9px; text-align: center; font-weight: bold; }
-td { padding: 5px 8px; border: 1px solid #D0D5DD; vertical-align: top; }
+table { width: 100%; border-collapse: collapse; font-size: 9px; }
+th { background: #1B2A4A; color: white; padding: 5px 6px; font-size: 8px; text-align: center; font-weight: bold; }
+td { padding: 4px 6px; border: 1px solid #D0D5DD; vertical-align: top; }
 td.center { text-align: center; }
 .p1 { color: #b5282a; font-weight: bold; } .p2 { color: #8a5c1a; font-weight: bold; } .p3 { color: #6b7a99; font-weight: bold; }
 .done { color: #1a6b3a; } .behind { color: #8a5c1a; } .late { color: #b5282a; }
 .initiative { font-weight: bold; color: #1B2A4A; }
 .initiative.completed { color: #1a6b3a; }
-.detail { font-size: 9px; color: #445566; }
-.sub { font-size: 8px; color: #6b7a99; margin-top: 2px; }
+.detail { font-size: 8px; color: #445566; }
+.sub { font-size: 7px; color: #6b7a99; margin-top: 2px; }
 .qtr-label { font-size: 8px; color: #6b7a99; }
+.comment-col { font-size: 8px; color: #445566; }
+.comment-entry { margin-bottom: 4px; }
+.comment-date { font-weight: bold; color: #1B2A4A; font-size: 7px; }
+.comment-exp { color: #8a5c1a; font-size: 7px; }
+.comment-nc { color: #6b7a99; font-size: 7px; font-style: italic; }
 .empty { color: #8899aa; font-style: italic; padding: 20px; }
 </style></head><body>`;
 
     categories.forEach((cat, ci) => {
       const items = allCategoryItems[cat] || [];
+      const active = items.filter(i => !i.isCompleted);
+      const done = items.filter(i => i.isCompleted);
+
       html += `<div class="slide${ci > 0 ? ' page-break' : ''}">`;
       html += `<div class="slide-title">${cat} Update</div><div class="title-line"></div>`;
 
       if (items.length === 0) {
         html += `<div class="empty">No initiatives.</div>`;
       } else {
-        html += `<table><thead><tr><th style="width:3%">P</th><th style="width:5%">Qtr</th><th style="width:16%">Initiative</th><th style="width:22%">Details</th><th style="width:7%">Target</th><th style="width:7%">Expected</th><th style="width:8%">Status</th><th style="width:24%">Latest Comment</th><th style="width:8%">Cost</th></tr></thead><tbody>`;
-        items.forEach(item => {
-          const p = urgency[item.id] ?? item.urgency ?? 2;
-          const revised = revisedDates[item.id];
-          const tl = getTimeline(item);
-          const latest = (comments[item.id] || []).slice(-1)[0];
-          const subs = subItems[item.id] || [];
-          const isComplete = item.isCompleted;
+        // Active items
+        if (active.length > 0) {
+          html += tblHead;
+          active.forEach(item => { html += buildItemRow(item); });
+          html += `</tbody></table>`;
+        }
 
-          let detailHtml = (item.detail || '-').replace(/</g, '&lt;');
-          if (subs.length > 0) {
-            detailHtml += '<div class="sub">' + subs.map(s => (s.done ? '\u2713 ' : '\u25CB ') + s.name.replace(/</g, '&lt;')).join('<br>') + '</div>';
-          }
-
-          let statusText = isComplete ? '\u2713 Done' : (tl ? tl.label : '-');
-          const statusClass = isComplete ? 'done' : (tl ? (tl.color === '#b5282a' ? 'late' : tl.color === '#1a6b3a' ? 'done' : 'behind') : '');
-
-          html += `<tr>
-            <td class="center p${p}">P${p}</td>
-            <td class="center qtr-label">${item.quarter}</td>
-            <td class="initiative${isComplete ? ' completed' : ''}">${item.name.replace(/</g, '&lt;')}</td>
-            <td class="detail">${detailHtml}</td>
-            <td class="center">${fmtTarget(item.target)}</td>
-            <td class="center">${revised ? fmtTarget(revised) : '-'}</td>
-            <td class="center ${statusClass}">${statusText}</td>
-            <td class="detail">${latest ? latest.text.replace(/</g, '&lt;') : '-'}</td>
-            <td class="center">${item.cost ? fmt(item.cost) : '-'}</td>
-          </tr>`;
-        });
-        html += `</tbody></table>`;
+        // Completed items at the bottom
+        if (done.length > 0) {
+          html += `<div class="completed-label">\u2713 Completed</div>`;
+          html += tblHead;
+          done.forEach(item => { html += buildItemRow(item); });
+          html += `</tbody></table>`;
+        }
       }
       html += `</div>`;
     });
