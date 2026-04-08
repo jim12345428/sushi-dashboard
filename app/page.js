@@ -1607,23 +1607,37 @@ const ROADMAP_DATA = [
 const ROADMAP_QUARTERS = ['Q1 2026', 'Q2 2026', 'Q3 2026'];
 const ROADMAP_CATEGORIES = ['Culinary', 'People', 'HR', 'Operations', 'Marketing'];
 
+function loadSaved(key, fallback) {
+  if (typeof window === 'undefined') return fallback;
+  try { const v = localStorage.getItem('roadmap_' + key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+
 function RoadmapTab() {
-  const [revisedDates, setRevisedDates] = useState({});
-  const [comments, setComments] = useState({});
+  const [revisedDates, setRevisedDates] = useState(() => loadSaved('revisedDates', {}));
+  const [comments, setComments] = useState(() => loadSaved('comments', {}));
   const [drafts, setDrafts] = useState({});
   const [noChange, setNoChange] = useState({});
-  const [completed, setCompleted] = useState({});
+  const [completed, setCompleted] = useState(() => loadSaved('completed', {}));
   const [expanded, setExpanded] = useState({});
-  const [customItems, setCustomItems] = useState([]);
+  const [customItems, setCustomItems] = useState(() => loadSaved('customItems', []));
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '', urgency: 2 });
   const [activeQuarter, setActiveQuarter] = useState('Q1 2026');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [subItems, setSubItems] = useState({});
+  const [subItems, setSubItems] = useState(() => loadSaved('subItems', {}));
   const [showSubForm, setShowSubForm] = useState({});
   const [subDraft, setSubDraft] = useState({});
-  const [urgency, setUrgency] = useState({}); // { itemId: 1|2|3 }
-  const [completionNotes, setCompletionNotes] = useState({}); // { itemId: string }
+  const [urgency, setUrgency] = useState(() => loadSaved('urgency', {}));
+  const [completionNotes, setCompletionNotes] = useState(() => loadSaved('completionNotes', {}));
+
+  // Persist roadmap state to localStorage
+  useEffect(() => { localStorage.setItem('roadmap_revisedDates', JSON.stringify(revisedDates)); }, [revisedDates]);
+  useEffect(() => { localStorage.setItem('roadmap_comments', JSON.stringify(comments)); }, [comments]);
+  useEffect(() => { localStorage.setItem('roadmap_completed', JSON.stringify(completed)); }, [completed]);
+  useEffect(() => { localStorage.setItem('roadmap_customItems', JSON.stringify(customItems)); }, [customItems]);
+  useEffect(() => { localStorage.setItem('roadmap_subItems', JSON.stringify(subItems)); }, [subItems]);
+  useEffect(() => { localStorage.setItem('roadmap_urgency', JSON.stringify(urgency)); }, [urgency]);
+  useEffect(() => { localStorage.setItem('roadmap_completionNotes', JSON.stringify(completionNotes)); }, [completionNotes]);
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
