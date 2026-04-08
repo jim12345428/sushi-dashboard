@@ -922,14 +922,213 @@ function ModelComparison({ storeSales }) {
     return t;
   }, [analysis]);
 
+  async function exportPptx() {
+    const pptxgen = (await import('pptxgenjs')).default;
+    const prs = new pptxgen();
+    prs.layout = 'LAYOUT_WIDE';
+    prs.author = 'Fjord Fish Market';
+    prs.subject = 'Sushi Concession Model Comparison';
+
+    const navy = '0f1f3d', gold = 'c9a84c', white = 'FFFFFF', lightGray = 'f7f9fc', green = '1a6b3a', red = 'b5282a';
+    const hdr = { color: white, fill: { color: navy }, bold: true, fontSize: 10, align: 'center' };
+    const cell = { fontSize: 9, align: 'right', border: { type: 'solid', color: 'dde4ed', pt: 0.5 } };
+    const cellL = { ...cell, align: 'left' };
+
+    // Slide 1: Title
+    let slide = prs.addSlide();
+    slide.background = { color: navy };
+    slide.addText('Fjord Fish Market', { x: 0.8, y: 1.0, w: 11.5, fontSize: 16, color: gold, fontFace: 'Arial' });
+    slide.addText('Sushi Concession\nOwner-Operator Model', { x: 0.8, y: 1.8, w: 11.5, fontSize: 36, color: white, bold: true, fontFace: 'Arial', lineSpacingMultiple: 1.1 });
+    slide.addText('Executive Summary \u2014 Model Comparison', { x: 0.8, y: 3.8, w: 11.5, fontSize: 18, color: gold, fontFace: 'Arial' });
+    slide.addText('Analysis Period: April 2025 \u2013 March 2026', { x: 0.8, y: 4.6, w: 11.5, fontSize: 12, color: '8899aa', fontFace: 'Arial' });
+
+    // Slide 2: Summary
+    slide = prs.addSlide();
+    slide.addText('Financial Summary', { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: navy });
+    slide.addText('Current operating model vs proposed owner-operator model', { x: 0.5, y: 0.8, fontSize: 12, color: '6b7a99' });
+
+    const summaryData = [
+      ['', 'Current Model', 'Proposed Model', 'Delta'],
+      ['Total Revenue', fmt(totals.actRev), fmt(totals.propRev), ''],
+      ['Fjord Net Revenue', fmt(totals.curFjord), fmt(totals.newFjord), (totals.delta >= 0 ? '+' : '') + fmt(totals.delta)],
+      ['Fjord Margin', pct(totals.curFjord / totals.actRev), pct(totals.newFjord / totals.propRev), ''],
+      ['Total Operator Take-Home', '', fmt(totals.opTH), ''],
+    ];
+    slide.addTable(summaryData, {
+      x: 0.5, y: 1.4, w: 12,
+      rowH: 0.5,
+      colW: [3.5, 2.8, 2.8, 2.8],
+      border: { type: 'solid', color: 'dde4ed', pt: 0.5 },
+      fontSize: 12,
+      headerRow: true,
+      autoPage: false,
+    });
+    summaryData[0].forEach((_, i) => { summaryData[0][i] = { text: summaryData[0][i], options: hdr }; });
+
+    // Key assumptions
+    const assumptions = [
+      'Revenue share tiers: 62% (<$300k) / 55% ($300-500k) / 49% ($500-700k) / 43% (>$700k)',
+      'Growth accelerator: +10% (5-15% YoY), +18% (15-25% YoY), +25% (25%+ YoY)',
+      'Payroll burden: 14% \u2014 Temp rate: $335/day flat \u2014 Employee rate: $25/hr + OT + 14%',
+      'In-house COGS: 18% \u2014 Proposed operator COGS: ' + opCogsRate + '%',
+      'All stores require ' + (CREW_SIZE['cos cob']) + '-person crew except Brooklyn & Larchmont (1 person)',
+    ];
+    slide.addText('Key Assumptions', { x: 0.5, y: 4.2, fontSize: 14, bold: true, color: navy });
+    assumptions.forEach((a, i) => {
+      slide.addText('\u2022 ' + a, { x: 0.7, y: 4.7 + i * 0.35, fontSize: 9, color: '6b7a99', w: 11.5 });
+    });
+
+    // Slide 3: Store-by-store comparison
+    slide = prs.addSlide();
+    slide.addText('Store-by-Store Comparison', { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: navy });
+
+    const tableRows = [
+      [
+        { text: 'Store', options: hdr },
+        { text: 'Revenue', options: hdr },
+        { text: 'YoY', options: hdr },
+        { text: 'Current Model', options: hdr },
+        { text: 'Fjord Net', options: hdr },
+        { text: 'Prop Revenue', options: hdr },
+        { text: 'Op Payout', options: hdr },
+        { text: 'Op Take-Home', options: hdr },
+        { text: 'Fjord Net', options: hdr },
+        { text: 'Delta', options: hdr },
+      ],
+    ];
+    analysis.forEach(a => {
+      const dc = a.delta >= 0 ? green : red;
+      const thc = a.opTakeHome >= 70000 ? green : red;
+      tableRows.push([
+        { text: STORE_LABELS[a.storeKey], options: { ...cellL, bold: true } },
+        { text: fmt(a.actualRevenue), options: cell },
+        { text: (a.actualGrowth > 0 ? '+' : '') + (a.actualGrowth * 100).toFixed(1) + '%', options: { ...cell, color: a.actualGrowth >= 0 ? green : red } },
+        { text: a.currentModel, options: { ...cellL, fontSize: 8 } },
+        { text: fmt(a.currentFjord), options: { ...cell, bold: true } },
+        { text: fmt(a.proposedRevenue), options: cell },
+        { text: fmt(a.proposedPayout), options: { ...cell, color: gold } },
+        { text: fmt(a.opTakeHome), options: { ...cell, color: thc, bold: true } },
+        { text: fmt(a.proposedFjord), options: { ...cell, color: gold, bold: true } },
+        { text: (a.delta >= 0 ? '+' : '') + fmt(a.delta), options: { ...cell, color: dc, bold: true } },
+      ]);
+    });
+    // Totals row
+    tableRows.push([
+      { text: 'TOTAL', options: { ...cellL, bold: true, fill: { color: lightGray } } },
+      { text: fmt(totals.actRev), options: { ...cell, bold: true, fill: { color: lightGray } } },
+      { text: '', options: { ...cell, fill: { color: lightGray } } },
+      { text: '', options: { ...cell, fill: { color: lightGray } } },
+      { text: fmt(totals.curFjord), options: { ...cell, bold: true, fill: { color: lightGray } } },
+      { text: fmt(totals.propRev), options: { ...cell, bold: true, fill: { color: lightGray } } },
+      { text: '', options: { ...cell, fill: { color: lightGray } } },
+      { text: fmt(totals.opTH), options: { ...cell, bold: true, color: green, fill: { color: lightGray } } },
+      { text: fmt(totals.newFjord), options: { ...cell, bold: true, color: gold, fill: { color: lightGray } } },
+      { text: (totals.delta >= 0 ? '+' : '') + fmt(totals.delta), options: { ...cell, bold: true, color: totals.delta >= 0 ? green : red, fill: { color: lightGray } } },
+    ]);
+
+    slide.addTable(tableRows, {
+      x: 0.3, y: 0.9, w: 12.5,
+      rowH: 0.4,
+      colW: [1.3, 1.1, 0.8, 1.8, 1.1, 1.1, 1.1, 1.2, 1.1, 1.0],
+      border: { type: 'solid', color: 'dde4ed', pt: 0.5 },
+      autoPage: false,
+    });
+
+    // Slide 4: Multi-year projection
+    slide = prs.addSlide();
+    slide.addText('Multi-Year Projection', { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: navy });
+    slide.addText('Current model assumes stores continue at actual YoY rate. Proposed model uses set growth rates.', { x: 0.5, y: 0.8, fontSize: 11, color: '6b7a99' });
+
+    const projRows = [[]];
+    const projYears = 6;
+    projRows[0].push({ text: '', options: hdr });
+    for (let yr = 0; yr < projYears; yr++) projRows[0].push({ text: yr === 0 ? 'Year 1' : 'Year ' + (yr+1), options: hdr });
+    projRows[0].push({ text: 'Cumulative', options: { ...hdr, fill: { color: gold } } });
+
+    const rowLabels = ['Current Revenue', 'Current Fjord Net', 'Proposed Revenue', 'Proposed Fjord Net', 'Delta'];
+    const projData = rowLabels.map(() => []);
+    let cumCur = 0, cumProp = 0;
+
+    for (let yr = 0; yr < projYears; yr++) {
+      let cRev = 0, cFjord = 0, pRev = 0, pFjord = 0;
+      analysis.forEach(a => {
+        const cr = a.actualRevenue * Math.pow(1 + a.actualGrowth, yr);
+        const cc = calcCurrentCosts(a.storeKey, cr, concCogsRate / 100, convertTemps);
+        cRev += cr; cFjord += cc.fjord;
+        const gr = (storeGrowth[a.storeKey] || 0) / 100;
+        const pr = a.prior12 * Math.pow(1 + gr, yr + 1);
+        const pp = calcProposedPayout(pr);
+        let bonus = 0;
+        if (gr > GROWTH_ACCEL_TIERS[0].above) {
+          for (const t of GROWTH_ACCEL_TIERS) { if (gr > t.above) bonus += pr * (Math.min(gr, t.upTo) - t.above) * t.pct; }
+        }
+        pRev += pr; pFjord += pr - pp - bonus;
+      });
+      cumCur += cFjord; cumProp += pFjord;
+      projData[0].push(fmt(cRev));
+      projData[1].push(fmt(cFjord));
+      projData[2].push(fmt(pRev));
+      projData[3].push(fmt(pFjord));
+      const d = pFjord - cFjord;
+      projData[4].push((d >= 0 ? '+' : '') + fmt(d));
+    }
+
+    rowLabels.forEach((label, i) => {
+      const row = [{ text: label, options: { ...cellL, bold: true } }];
+      projData[i].forEach(v => row.push({ text: v, options: cell }));
+      if (i === 1) row.push({ text: fmt(cumCur), options: { ...cell, bold: true } });
+      else if (i === 3) row.push({ text: fmt(cumProp), options: { ...cell, bold: true, color: gold } });
+      else if (i === 4) row.push({ text: (cumProp-cumCur>=0?'+':'') + fmt(cumProp-cumCur), options: { ...cell, bold: true, color: cumProp-cumCur>=0?green:red } });
+      else row.push({ text: '', options: cell });
+      projRows.push(row);
+    });
+
+    slide.addTable(projRows, {
+      x: 0.5, y: 1.3, w: 12,
+      rowH: 0.45,
+      colW: [2.2, ...Array(projYears).fill(1.3), 1.6],
+      border: { type: 'solid', color: 'dde4ed', pt: 0.5 },
+      autoPage: false,
+    });
+
+    // Slide 5: The Case for Change
+    slide = prs.addSlide();
+    slide.background = { color: navy };
+    slide.addText('The Case for Change', { x: 0.8, y: 0.5, fontSize: 28, bold: true, color: white });
+    const points = [
+      'Eliminate direct labor management, temp coordination, and employment liability across 4 in-house stores',
+      'Owner-operators are incentivized to grow revenue \u2014 their income depends on it',
+      'Tiered structure prevents absentee operators while rewarding hands-on performance',
+      'Daily ACH payouts via Modern Treasury create a transparent, automated compensation system',
+      'Current model shows declining revenue at multiple locations with fixed labor costs',
+      'Proposed model turns fixed costs into variable costs that scale with performance',
+      totals.delta >= 0
+        ? 'At projected growth rates, Fjord nets ' + fmt(totals.newFjord) + ' vs ' + fmt(totals.curFjord) + ' under current model'
+        : 'Year 1 investment of ' + fmt(Math.abs(totals.delta)) + ' funds a model that compounds over time as operators drive growth',
+    ];
+    points.forEach((p, i) => {
+      slide.addText('\u2022', { x: 0.8, y: 1.5 + i * 0.65, fontSize: 16, color: gold });
+      slide.addText(p, { x: 1.3, y: 1.5 + i * 0.65, w: 10.5, fontSize: 14, color: white });
+    });
+
+    await prs.writeFile({ fileName: 'Fjord_Sushi_Model_Comparison.pptx' });
+  }
+
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-xl font-bold" style={{color: NAVY}}>Model Comparison</h1>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold" style={{color: NAVY}}>Model Comparison</h1>
         <p className="text-sm mt-1" style={{color:'#6b7a99'}}>
           What actually happened (current model) vs what would have happened with owner-operators at a hypothetical growth rate.
           Analysis period: April 2025 &ndash; March 2026.
         </p>
+        </div>
+        <button onClick={exportPptx}
+          className="px-4 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0"
+          style={{background: NAVY, border: '1px solid ' + GOLD_ACCENT}}>
+          Export PowerPoint
+        </button>
       </div>
 
       {/* Key Assumptions */}
