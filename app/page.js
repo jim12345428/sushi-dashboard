@@ -706,6 +706,15 @@ function IncomeCalculator() {
 }
 
 /* ── MODEL COMPARISON ── */
+const STORE_HRS_WEEK = 62; // Mon-Sat 9hrs + Sun 8hrs
+const CREW_SIZE = { brooklyn: 1, larchmont: 1, 'cos cob': 2, darien: 2, westport: 2, 'new canaan': 2 };
+
+// Total person-hours needed per week
+function storePersonHrs(storeKey) { return STORE_HRS_WEEK * CREW_SIZE[storeKey]; }
+
+// Additional staff hours beyond what the operator covers (50 hrs/wk across 6 days)
+function additionalStaffHrs(storeKey) { return storePersonHrs(storeKey) - 50; }
+
 const CURRENT_MODELS = {
   brooklyn:     { type: 'concession', pct: 0.70,  label: 'Concession 70%' },
   darien:       { type: 'concession', pct: 0.525, label: 'Concession 52.5%' },
@@ -715,20 +724,22 @@ const CURRENT_MODELS = {
   'new canaan': { type: 'inhouse', emps: 2, empHrs: 50, cogsRate: 0.18, label: '2 emps + temps, 18% COGS' },
 };
 
-function calcCurrentFjord(storeKey, revenue) {
+function calcCurrentCosts(storeKey, revenue) {
   const m = CURRENT_MODELS[storeKey];
-  if (m.type === 'concession') return revenue * (1 - m.pct);
-
-  const STORE_HRS = 62, WEEKS = 52, EMP_RATE = 25, TEMP_DAY = 335;
-  const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.25;
+  if (m.type === 'concession') {
+    const operatorPay = revenue * m.pct;
+    return { labor: operatorPay, cogs: 0, fjord: revenue - operatorPay, laborLabel: 'Operator ' + (m.pct * 100) + '%' };
+  }
+  const WEEKS = 52, EMP_RATE = 25, TEMP_DAY = 335;
+  const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.25; // OT + burden
   const empAnnual = empWeekly * WEEKS;
   const totalEmpHrs = m.emps * m.empHrs;
-  const needPersonHrs = m.emps >= 2 ? STORE_HRS * 2 : STORE_HRS;
-  const gapHrs = m.emps === 0 ? 0 : Math.max(0, needPersonHrs - totalEmpHrs);
+  const needed = storePersonHrs(storeKey);
+  const gapHrs = m.emps === 0 ? 0 : Math.max(0, needed - totalEmpHrs);
   const tempCost = m.emps === 0 ? 7 * TEMP_DAY * WEEKS : gapHrs * (TEMP_DAY / 9) * WEEKS;
   const labor = m.emps * empAnnual + tempCost;
   const cogs = revenue * m.cogsRate;
-  return revenue - labor - cogs;
+  return { labor, cogs, fjord: revenue - labor - cogs, laborLabel: m.label };
 }
 
 function calcProposedPayout(revenue) {
@@ -742,11 +753,12 @@ function calcProposedPayout(revenue) {
   return share;
 }
 
-// Staffing assumptions for operator take-home estimate
-const PROPOSED_STAFF = {
-  brooklyn: 12, larchmont: 12,
-  'cos cob': 74, darien: 74, westport: 74, 'new canaan': 74,
-};
+function calcProposedOperatorCosts(storeKey, revenue) {
+  const cogs = revenue * 0.20;
+  const staffHrs = additionalStaffHrs(storeKey);
+  const payroll = staffHrs * 25 * 52 * 1.25;
+  return { cogs, payroll };
+}
 
 function ModelComparison({ storeSales }) {
   const [proposedGrowth, setProposedGrowth] = useState(10);
@@ -790,8 +802,7 @@ function ModelComparison({ storeSales }) {
 
       // Current model uses ACTUAL trailing 12 revenue
       const actualRevenue = trailing12;
-      const currentFjord = calcCurrentFjord(storeKey, actualRevenue);
-      const currentModel = CURRENT_MODELS[storeKey];
+      const cur = calcCurrentCosts(storeKey, actualRevenue);
 
       // Proposed model uses prior year × hypothetical growth
       const gRate = proposedGrowth / 100;
@@ -808,10 +819,9 @@ function ModelComparison({ storeSales }) {
       const proposedPayout = proposedBasePayout + growthBonus;
       const proposedFjord = proposedRevenue - proposedPayout;
 
-      // Operator take-home estimate under proposed
-      const opCogs = proposedRevenue * 0.20;
-      const opPayroll = PROPOSED_STAFF[storeKey] * 25 * 52 * 1.25;
-      const opTakeHome = proposedPayout - opCogs - opPayroll;
+      // Operator costs under proposed
+      const propOp = calcProposedOperatorCosts(storeKey, proposedRevenue);
+      const opTakeHome = proposedPayout - propOp.cogs - propOp.payroll;
 
       // Monthly YoY breakdown (exclude incomplete months)
       const monthlyYoY = [];
@@ -836,22 +846,27 @@ function ModelComparison({ storeSales }) {
         prior12,
         actualGrowth,
         proposedRevenue,
-        currentModel: currentModel.label,
-        currentFjord,
-        proposedPayout,
-        proposedFjord,
-        growthBonus,
-        opTakeHome,
-        delta: proposedFjord - currentFjord,
+        currentModel: CURRENT_MODELS[storeKey].label,
+        curLabor: cur.labor, curCogs: cur.cogs, currentFjord: cur.fjord,
+        crew: CREW_SIZE[storeKey],
+        proposedPayout, proposedFjord, growthBonus,
+        propCogs: propOp.cogs, propPayroll: propOp.payroll, opTakeHome,
+        delta: proposedFjord - cur.fjord,
         monthlyYoY,
       };
     }).filter(Boolean);
   }, [storeSales, proposedGrowth]);
 
   const totals = useMemo(() => {
-    let actRev = 0, propRev = 0, curFjord = 0, newFjord = 0, opTH = 0;
-    analysis.forEach(a => { actRev += a.actualRevenue; propRev += a.proposedRevenue; curFjord += a.currentFjord; newFjord += a.proposedFjord; opTH += a.opTakeHome; });
-    return { actRev, propRev, curFjord, newFjord, opTH, delta: newFjord - curFjord };
+    const t = { actRev:0, propRev:0, curLabor:0, curCogs:0, curFjord:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
+    analysis.forEach(a => {
+      t.actRev += a.actualRevenue; t.propRev += a.proposedRevenue;
+      t.curLabor += a.curLabor; t.curCogs += a.curCogs; t.curFjord += a.currentFjord;
+      t.propPayout += a.proposedPayout; t.propCogs += a.propCogs; t.propPayroll += a.propPayroll;
+      t.opTH += a.opTakeHome; t.newFjord += a.proposedFjord;
+    });
+    t.delta = t.newFjord - t.curFjord;
+    return t;
   }, [analysis]);
 
   return (
@@ -892,64 +907,80 @@ function ModelComparison({ storeSales }) {
 
       {/* Comparison Table */}
       <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
-              <th className="text-left px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Actual YoY</th>
-              <th className="text-left px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb'}}>Revenue</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Fjord Net</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Revenue</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Op Payout</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Op Take-Home</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Fjord Net</th>
-              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analysis.map(a => {
-              const deltaColor = a.delta >= 0 ? '#1a6b3a' : '#b5282a';
-              const thColor = a.opTakeHome >= 70000 ? '#1a6b3a' : '#b5282a';
-              return (
-                <tr key={a.storeKey} style={{borderBottom:'1px solid #eef1f6'}} className="hover:bg-blue-50/30">
-                  <td className="px-3 py-3 font-semibold" style={{color: NAVY}}>{STORE_LABELS[a.storeKey]}</td>
-                  <td className="px-3 py-3 text-right font-medium" style={{color: a.actualGrowth > 0 ? '#1a6b3a' : a.actualGrowth < 0 ? '#b5282a' : '#6b7a99'}}>
-                    {a.actualGrowth > 0 ? '+' : ''}{(a.actualGrowth * 100).toFixed(1)}%
-                  </td>
-                  <td className="px-3 py-3 text-xs" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{a.currentModel}</td>
-                  <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(237,246,251,0.4)'}}>{fmt(a.actualRevenue)}</td>
-                  <td className="px-3 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
-                  <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>{fmt(a.proposedRevenue)}</td>
-                  <td className="px-3 py-3 text-right" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>
-                    {fmt(a.proposedPayout)}
-                  </td>
-                  <td className="px-3 py-3 text-right font-medium" style={{color: thColor, background:'rgba(253,248,236,0.4)'}}>{fmt(a.opTakeHome)}</td>
-                  <td className="px-3 py-3 text-right font-semibold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
-                  <td className="px-3 py-3 text-right font-bold" style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
-                    {a.delta >= 0 ? '+' : ''}{fmt(a.delta)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{background:'#f0f4f8', borderTop:'2px solid ' + NAVY}}>
-              <td className="px-3 py-3 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>Total</td>
-              <td className="px-3 py-3"></td>
-              <td className="px-3 py-3" style={{background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}></td>
-              <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.actRev)}</td>
-              <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
-              <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #e8d38a'}}>{fmt(totals.propRev)}</td>
-              <td className="px-3 py-3" style={{background:'rgba(253,248,236,0.6)'}}></td>
-              <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.opTH)}</td>
-              <td className="px-3 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.newFjord)}</td>
-              <td className="px-3 py-3 text-right font-bold" style={{color: totals.delta >= 0 ? '#1a6b3a' : '#b5282a', borderLeft:'2px solid #dde4ed'}}>
-                {totals.delta >= 0 ? '+' : ''}{fmt(totals.delta)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[1100px]">
+            <thead>
+              <tr style={{background:'#f7f9fc', borderBottom:'1px solid #dde4ed'}}>
+                <th rowSpan={2} className="text-left px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
+                <th rowSpan={2} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Crew</th>
+                <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Actual YoY</th>
+                <th colSpan={4} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model (Actual)</th>
+                <th colSpan={5} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Proposed Model (+{proposedGrowth}% YoY)</th>
+                <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
+              </tr>
+              <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb', fontSize:'10px'}}>Revenue</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#edf6fb', fontSize:'10px'}}>Labor/Op</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', fontSize:'10px'}}>COGS</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#1a6b8a', background:'#edf6fb', fontSize:'10px'}}>Fjord Net</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#fdf8ec', borderLeft:'2px solid #e8d38a', fontSize:'10px'}}>Revenue</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color: GOLD_ACCENT, background:'#fdf8ec', fontSize:'10px'}}>Op Payout</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#fdf8ec', fontSize:'10px'}}>Op COGS+Labor</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#1a6b3a', background:'#fdf8ec', fontSize:'10px'}}>Op Take-Home</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color: GOLD_ACCENT, background:'#fdf8ec', fontSize:'10px'}}>Fjord Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analysis.map(a => {
+                const deltaColor = a.delta >= 0 ? '#1a6b3a' : '#b5282a';
+                const thColor = a.opTakeHome >= 70000 ? '#1a6b3a' : '#b5282a';
+                return (
+                  <tr key={a.storeKey} style={{borderBottom:'1px solid #eef1f6'}} className="hover:bg-blue-50/30">
+                    <td className="px-3 py-3 font-semibold" style={{color: NAVY}}>
+                      {STORE_LABELS[a.storeKey]}
+                      <div className="font-normal text-xs" style={{color:'#8899aa', fontSize:'10px'}}>{a.currentModel}</div>
+                    </td>
+                    <td className="px-3 py-3 text-center" style={{color:'#6b7a99'}}>{a.crew}</td>
+                    <td className="px-3 py-3 text-right font-medium" style={{color: a.actualGrowth > 0 ? '#1a6b3a' : a.actualGrowth < 0 ? '#b5282a' : '#6b7a99'}}>
+                      {a.actualGrowth > 0 ? '+' : ''}{(a.actualGrowth * 100).toFixed(1)}%
+                    </td>
+                    <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmt(a.actualRevenue)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.curLabor)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{a.curCogs > 0 ? fmt(a.curCogs) : '-'}</td>
+                    <td className="px-3 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>{fmt(a.proposedRevenue)}</td>
+                    <td className="px-3 py-3 text-right" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedPayout)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propCogs + a.propPayroll)}</td>
+                    <td className="px-3 py-3 text-right font-medium" style={{color: thColor, background:'rgba(253,248,236,0.4)'}}>{fmt(a.opTakeHome)}</td>
+                    <td className="px-3 py-3 text-right font-semibold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
+                    <td className="px-3 py-3 text-right font-bold" style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
+                      {a.delta >= 0 ? '+' : ''}{fmt(a.delta)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{background:'#f0f4f8', borderTop:'2px solid ' + NAVY}}>
+                <td className="px-3 py-3 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>Total</td>
+                <td className="px-3 py-3"></td>
+                <td className="px-3 py-3"></td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}>{fmt(totals.actRev)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curLabor)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curCogs)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #e8d38a'}}>{fmt(totals.propRev)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.propPayout)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.propCogs + totals.propPayroll)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.opTH)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.newFjord)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color: totals.delta >= 0 ? '#1a6b3a' : '#b5282a', borderLeft:'2px solid #dde4ed'}}>
+                  {totals.delta >= 0 ? '+' : ''}{fmt(totals.delta)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
 
       {/* Monthly YoY Detail */}
