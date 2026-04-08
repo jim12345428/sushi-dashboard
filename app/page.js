@@ -761,7 +761,8 @@ function calcProposedOperatorCosts(storeKey, revenue) {
 }
 
 function ModelComparison({ storeSales }) {
-  const [proposedGrowth, setProposedGrowth] = useState(10);
+  const defaultGrowth = () => Object.fromEntries(STORES.map(s => [s, 10]));
+  const [storeGrowth, setStoreGrowth] = useState(defaultGrowth);
 
   const analysis = useMemo(() => {
     return STORES.map(storeKey => {
@@ -805,7 +806,7 @@ function ModelComparison({ storeSales }) {
       const cur = calcCurrentCosts(storeKey, actualRevenue);
 
       // Proposed model uses prior year × hypothetical growth
-      const gRate = proposedGrowth / 100;
+      const gRate = (storeGrowth[storeKey] || 0) / 100;
       const proposedRevenue = prior12 > 0 ? prior12 * (1 + gRate) : actualRevenue;
       const proposedBasePayout = calcProposedPayout(proposedRevenue);
 
@@ -848,14 +849,14 @@ function ModelComparison({ storeSales }) {
         proposedRevenue,
         currentModel: CURRENT_MODELS[storeKey].label,
         curLabor: cur.labor, curCogs: cur.cogs, currentFjord: cur.fjord,
-        crew: CREW_SIZE[storeKey],
+        crew: CREW_SIZE[storeKey], gRate,
         proposedPayout, proposedFjord, growthBonus,
         propCogs: propOp.cogs, propPayroll: propOp.payroll, opTakeHome,
         delta: proposedFjord - cur.fjord,
         monthlyYoY,
       };
     }).filter(Boolean);
-  }, [storeSales, proposedGrowth]);
+  }, [storeSales, storeGrowth]);
 
   const totals = useMemo(() => {
     const t = { actRev:0, propRev:0, curLabor:0, curCogs:0, curFjord:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
@@ -879,21 +880,10 @@ function ModelComparison({ storeSales }) {
         </p>
       </div>
 
-      {/* Growth Input + Summary */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <div className="rounded-xl p-4" style={{background:'white', border:`2px solid ${GOLD_ACCENT}`}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-2" style={{color:'#6b7a99'}}>Proposed YoY Growth</div>
-          <div className="flex items-center gap-2">
-            <input type="number" min="-20" max="50" step="1" value={proposedGrowth}
-              onChange={e => setProposedGrowth(Number(e.target.value))}
-              className="w-20 rounded-lg border px-3 py-2 text-lg font-bold text-center"
-              style={{borderColor: GOLD_ACCENT, color: NAVY}} />
-            <span className="text-lg font-bold" style={{color: NAVY}}>%</span>
-          </div>
-          <div className="text-xs mt-1" style={{color:'#8899aa'}}>Applied to all stores</div>
-        </div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          ['Current Revenue', fmt(totals.actRev), '#445566', '#f7f9fc', '#dde4ed'],
+          ['Current Revenue (Actual)', fmt(totals.actRev), '#445566', '#f7f9fc', '#dde4ed'],
           ['Current Fjord Net', fmt(totals.curFjord), '#1a6b8a', '#edf6fb', '#b3d9eb'],
           ['Proposed Fjord Net', fmt(totals.newFjord), GOLD_ACCENT, '#fdf8ec', '#e8d38a'],
           ['Delta', (totals.delta >= 0 ? '+' : '') + fmt(totals.delta), totals.delta >= 0 ? '#1a6b3a' : '#b5282a', totals.delta >= 0 ? '#edfaf2' : '#fef2f2', totals.delta >= 0 ? '#9dd4b5' : '#f5c6c6'],
@@ -903,6 +893,23 @@ function ModelComparison({ storeSales }) {
             <div className="text-2xl font-bold" style={{color}}>{val}</div>
           </div>
         ))}
+      </div>
+
+      {/* Set All Growth + Reset */}
+      <div className="rounded-xl p-4 mb-6 flex items-center gap-4" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Set all stores to:</div>
+        <div className="flex items-center gap-1">
+          <input type="number" min="-20" max="50" step="1"
+            className="w-16 rounded-lg border px-2 py-1 text-sm font-bold text-center"
+            style={{borderColor:'#dde4ed', color: NAVY}}
+            onChange={e => { const v = Number(e.target.value); setStoreGrowth(Object.fromEntries(STORES.map(s => [s, v]))); }}
+          />
+          <span className="text-sm font-bold" style={{color:'#6b7a99'}}>% YoY</span>
+        </div>
+        <button onClick={() => setStoreGrowth(defaultGrowth())}
+          className="text-xs px-3 py-1 rounded-lg ml-2" style={{background:'#f0f4f8', color:'#6b7a99', border:'1px solid #dde4ed'}}>
+          Reset to 10%
+        </button>
       </div>
 
       {/* Comparison Table */}
@@ -915,7 +922,8 @@ function ModelComparison({ storeSales }) {
                 <th rowSpan={2} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Crew</th>
                 <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Actual YoY</th>
                 <th colSpan={4} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model (Actual)</th>
-                <th colSpan={5} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Proposed Model (+{proposedGrowth}% YoY)</th>
+                <th rowSpan={2} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, borderLeft:'2px solid #e8d38a'}}>Growth</th>
+                <th colSpan={6} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Proposed Owner-Operator Model</th>
                 <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
               </tr>
               <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
@@ -925,7 +933,8 @@ function ModelComparison({ storeSales }) {
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#1a6b8a', background:'#edf6fb', fontSize:'10px'}}>Fjord Net</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#fdf8ec', borderLeft:'2px solid #e8d38a', fontSize:'10px'}}>Revenue</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color: GOLD_ACCENT, background:'#fdf8ec', fontSize:'10px'}}>Op Payout</th>
-                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#fdf8ec', fontSize:'10px'}}>Op COGS+Labor</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#fdf8ec', fontSize:'10px'}}>Op COGS</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#3a4a8a', background:'#fdf8ec', fontSize:'10px'}}>Op Labor</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#1a6b3a', background:'#fdf8ec', fontSize:'10px'}}>Op Take-Home</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color: GOLD_ACCENT, background:'#fdf8ec', fontSize:'10px'}}>Fjord Net</th>
               </tr>
@@ -948,9 +957,17 @@ function ModelComparison({ storeSales }) {
                     <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.curLabor)}</td>
                     <td className="px-3 py-3 text-right" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{a.curCogs > 0 ? fmt(a.curCogs) : '-'}</td>
                     <td className="px-3 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
+                    <td className="px-3 py-3 text-center" style={{borderLeft:'2px solid #e8d38a'}}>
+                      <input type="number" min="-20" max="50" step="1"
+                        value={storeGrowth[a.storeKey] || 0}
+                        onChange={e => setStoreGrowth(prev => ({...prev, [a.storeKey]: Number(e.target.value)}))}
+                        className="w-14 rounded border px-1 py-0.5 text-xs font-bold text-center"
+                        style={{borderColor:'#e8d38a', color: a.gRate > 0 ? '#1a6b3a' : a.gRate < 0 ? '#b5282a' : NAVY}} />
+                    </td>
                     <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>{fmt(a.proposedRevenue)}</td>
                     <td className="px-3 py-3 text-right" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedPayout)}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propCogs + a.propPayroll)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propCogs)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#3a4a8a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propPayroll)}</td>
                     <td className="px-3 py-3 text-right font-medium" style={{color: thColor, background:'rgba(253,248,236,0.4)'}}>{fmt(a.opTakeHome)}</td>
                     <td className="px-3 py-3 text-right font-semibold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
                     <td className="px-3 py-3 text-right font-bold" style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
@@ -969,9 +986,11 @@ function ModelComparison({ storeSales }) {
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curLabor)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curCogs)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
+                <td className="px-3 py-3" style={{borderLeft:'2px solid #e8d38a'}}></td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #e8d38a'}}>{fmt(totals.propRev)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.propPayout)}</td>
-                <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.propCogs + totals.propPayroll)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.propCogs)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#3a4a8a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.propPayroll)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.opTH)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.newFjord)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color: totals.delta >= 0 ? '#1a6b3a' : '#b5282a', borderLeft:'2px solid #dde4ed'}}>
