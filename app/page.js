@@ -14,10 +14,10 @@ const STORE_LABELS = {
 
 /* ── COMPENSATION MODEL ── */
 const BASE_TIERS = [
-  { upTo: 300000, pct: 0.59 },
-  { upTo: 500000, pct: 0.45 },
-  { upTo: 700000, pct: 0.33 },
-  { upTo: Infinity, pct: 0.21 },
+  { upTo: 300000, pct: 0.62 },
+  { upTo: 500000, pct: 0.55 },
+  { upTo: 700000, pct: 0.49 },
+  { upTo: Infinity, pct: 0.43 },
 ];
 const GROWTH_ACCEL_TIERS = [
   { above: 0.05, upTo: 0.15, pct: 0.10 },
@@ -300,7 +300,7 @@ function InvoicesTab({ invoices, store }) {
 function ScenarioModeler({ storeSales }) {
   const [cogsRate, setCogsRate] = useState(20);
   const [staffHrs, setStaffHrs] = useState({
-    brooklyn: 9, 'cos cob': 30, darien: 25, larchmont: 9, 'new canaan': 25, westport: 20,
+    brooklyn: 12, 'cos cob': 74, darien: 74, larchmont: 12, 'new canaan': 74, westport: 74,
   });
   const [staffRate, setStaffRate] = useState(25);
   const [growthPct, setGrowthPct] = useState(0);
@@ -792,9 +792,9 @@ function IncomeCalculator() {
         <div className="text-sm font-bold mb-4" style={{color: NAVY}}>Quick Scenarios &mdash; What Could You Earn?</div>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Getting Started', rev: 250000, growth: 0, staff: 9, desc: 'Lower-volume store, solo + 1 day coverage' },
-            { label: 'Solid Performer', rev: 500000, growth: 10, staff: 15, desc: 'Mid-volume store, steady growth' },
-            { label: 'Top Operator', rev: 750000, growth: 20, staff: 30, desc: 'High-volume store, strong growth' },
+            { label: 'Getting Started', rev: 250000, growth: 0, staff: 12, desc: 'Lower-volume store, solo + 1 day coverage' },
+            { label: 'Solid Performer', rev: 500000, growth: 10, staff: 74, desc: 'Mid-volume store, 2-person crew, steady growth' },
+            { label: 'Top Operator', rev: 750000, growth: 20, staff: 74, desc: 'High-volume store, 2-person crew, strong growth' },
           ].map(sc => {
             let t = 0, p = 0;
             for (const tier of BASE_TIERS) {
@@ -1013,7 +1013,7 @@ export default function Dashboard() {
 
               <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{color:'#6b7a99'}}>Comp Structure</div>
               {[
-                ['Base tiers', '59/45/33/21%'],
+                ['Base tiers', '62/55/49/43%'],
                 ['Growth bonus', 'Tiered > 5% YoY'],
                 ['Trailing growth', (currentGrowth > 0 ? '+' : '') + pct(currentGrowth)],
                 ['Eff. rate (30d)', pct(avgEffRate)],
@@ -1077,10 +1077,10 @@ export default function Dashboard() {
                 <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>How the Revenue Share Works</h2>
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   {[
-                    ['59%', 'First $300k'],
-                    ['45%', '$300k \u2013 $500k'],
-                    ['33%', '$500k \u2013 $700k'],
-                    ['21%', 'Above $700k'],
+                    ['62%', 'First $300k'],
+                    ['55%', '$300k \u2013 $500k'],
+                    ['49%', '$500k \u2013 $700k'],
+                    ['43%', 'Above $700k'],
                   ].map(([rate, range]) => (
                     <div key={rate} className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
                       <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>{rate}</div>
@@ -1107,9 +1107,9 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>
-                  <strong style={{color: NAVY}}>Example:</strong> A store doing $700k/year pays the operator: ($300k &times; 59%) + ($200k &times; 45%) + ($200k &times; 33%) = $177k + $90k + $66k = $333k.
+                  <strong style={{color: NAVY}}>Example:</strong> A store doing $700k/year pays the operator: ($300k &times; 62%) + ($200k &times; 55%) + ($200k &times; 49%) = $186k + $110k + $98k = $394k.
                   If that store grew 20% YoY, the operator earns growth bonuses: 10% on the 5&ndash;15% band ($700k &times; 10% &times; 10% = $7k) plus
-                  18% on the 15&ndash;20% band ($700k &times; 5% &times; 18% = $6.3k) = $13.3k bonus. Total payout: $346.3k.
+                  18% on the 15&ndash;20% band ($700k &times; 5% &times; 18% = $6.3k) = $13.3k bonus. Total payout: $407.3k.
                 </div>
               </div>
 
@@ -1143,7 +1143,7 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   {[
                     ['Owner-Operator', 'An independent business owner (LLC) who runs a sushi concession inside a Fjord location. Expected to work 50+ hours/week in-store.'],
-                    ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a 4-tier structure (59% / 45% / 33% / 21%) with breakpoints at $300k, $500k, and $700k annualized revenue.'],
+                    ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a 4-tier structure (62% / 55% / 49% / 43%) with breakpoints at $300k, $500k, and $700k annualized revenue.'],
                     ['Growth Accelerator', 'A tiered bonus on incremental revenue above 5% YoY growth: 10% on 5-15% growth, 18% on 15-25% growth, 25% on 25%+ growth. Rewards aggressive growth disproportionately.'],
                     ['COGS (Cost of Goods Sold)', 'Ingredients, packaging, and supplies. Estimated at 20% of revenue. Paid by the operator from their revenue share.'],
                     ['Payroll', 'Wages for any additional staff the operator hires, plus ~25% burden (FICA, SUTA/FUTA, workers comp). Paid by the operator from their share.'],
@@ -1152,7 +1152,7 @@ export default function Dashboard() {
                     ['Fjord Net', 'Revenue retained by Fjord after paying out the operator\'s share. Fjord does NOT pay COGS or payroll — those are the operator\'s responsibility.'],
                     ['Effective Rate', 'The blended percentage the operator actually receives, accounting for all tiers. Decreases as revenue grows due to the tiered structure.'],
                     ['Modern Treasury', 'Payment operations platform used to automate daily ACH payouts to operator bank accounts.'],
-                    ['Store Hours', 'Mon-Sat 10am-7pm, Sun 10am-6pm (63 hours/week). Operator covers 50+ hours; additional staff covers the remaining hours.'],
+                    ['Store Hours', 'Mon-Sat 10am-7pm, Sun 10am-6pm (62 hours/week). Operator works 50+ hours across 6 days. High-volume stores require 2 people at all times (74 hrs/wk additional staff). Low-volume stores need coverage for the operator\'s day off (12 hrs/wk).'],
                   ].map(([term, def]) => (
                     <div key={term} className="flex gap-4 py-2" style={{borderBottom:'1px solid #eef1f6'}}>
                       <div className="w-48 flex-shrink-0 text-sm font-semibold" style={{color: NAVY}}>{term}</div>
@@ -1172,7 +1172,7 @@ export default function Dashboard() {
                     const days = sales.length;
                     const annualized = days > 0 ? (totalRev / days) * 365 : 0;
                     const dailyAvg = days > 0 ? totalRev / days : 0;
-                    const needsStaff = annualized > 350000;
+                    const needsStaff = annualized > 400000;
                     return (
                       <div key={s} className="rounded-lg p-4" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
                         <div className="text-sm font-bold mb-2" style={{color: NAVY}}>{STORE_LABELS[s]}</div>
@@ -1188,7 +1188,7 @@ export default function Dashboard() {
                           <div className="flex justify-between">
                             <span>Staffing</span>
                             <strong style={{color: needsStaff ? '#3a4a8a' : '#1a6b3a'}}>
-                              {needsStaff ? 'Operator + staff' : 'Solo operator'}
+                              {needsStaff ? '2-person crew' : 'Solo + 1 day coverage'}
                             </strong>
                           </div>
                         </div>
@@ -1223,7 +1223,7 @@ export default function Dashboard() {
               <div className="rounded-lg p-3 mb-5 flex items-center gap-2 text-xs"
                 style={{background:'#fdf8ec', border:'1px solid #e8d38a', color:'#7a5a1a'}}>
                 <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                Amounts based on tiered revenue share (59/45/33/21%). Tiered growth accelerator applies when YoY growth exceeds 5%.
+                Amounts based on tiered revenue share (62/55/49/43%). Tiered growth accelerator applies when YoY growth exceeds 5%.
               </div>
               <div className="space-y-2">
                 {unpaid.map((r, i) => {
