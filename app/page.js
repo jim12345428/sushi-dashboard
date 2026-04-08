@@ -742,15 +742,21 @@ function calcProposedPayout(revenue) {
   return share;
 }
 
+// Staffing assumptions for operator take-home estimate
+const PROPOSED_STAFF = {
+  brooklyn: 12, larchmont: 12,
+  'cos cob': 74, darien: 74, westport: 74, 'new canaan': 74,
+};
+
 function ModelComparison({ storeSales }) {
-  const [growthOverrides, setGrowthOverrides] = useState({});
+  const [proposedGrowth, setProposedGrowth] = useState(10);
 
   const analysis = useMemo(() => {
     return STORES.map(storeKey => {
       const sales = storeSales[storeKey] || [];
       if (sales.length === 0) return null;
 
-      // Split into years for YoY calc
+      // Monthly revenue buckets
       const byMonth = {};
       sales.forEach(s => {
         const d = new Date(s.date);
@@ -758,31 +764,60 @@ function ModelComparison({ storeSales }) {
         byMonth[key] = (byMonth[key] || 0) + s.gross;
       });
 
-      // Trailing 12 months revenue
-      const allDates = sales.map(s => new Date(s.date)).sort((a, b) => a - b);
-      const lastDate = allDates[allDates.length - 1];
-      const oneYearAgo = new Date(lastDate);
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      // Use last complete month as end (exclude Apr 2026 partial)
+      const allMonthKeys = Object.keys(byMonth).sort();
+      const lastMonth = allMonthKeys[allMonthKeys.length - 1]; // e.g. 2026-04
+      const lastComplete = allMonthKeys[allMonthKeys.length - 2]; // e.g. 2026-03
+
+      // Trailing 12 complete months
+      const [lcY, lcM] = lastComplete.split('-').map(Number);
+      const t12Months = [];
+      for (let i = 0; i < 12; i++) {
+        let mo = lcM - i, yr = lcY;
+        while (mo <= 0) { mo += 12; yr--; }
+        t12Months.push(yr + '-' + String(mo).padStart(2, '0'));
+      }
 
       let trailing12 = 0, prior12 = 0;
-      const twoYearsAgo = new Date(oneYearAgo);
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 1);
-
-      sales.forEach(s => {
-        const d = new Date(s.date);
-        if (d > oneYearAgo && d <= lastDate) trailing12 += s.gross;
-        if (d > twoYearsAgo && d <= oneYearAgo) prior12 += s.gross;
+      t12Months.forEach(m => {
+        trailing12 += byMonth[m] || 0;
+        const [y, mo] = m.split('-');
+        const priorKey = (parseInt(y) - 1) + '-' + mo;
+        prior12 += byMonth[priorKey] || 0;
       });
 
       const actualGrowth = prior12 > 0 ? (trailing12 - prior12) / prior12 : 0;
-      const overrideGrowth = growthOverrides[storeKey];
-      const useGrowth = overrideGrowth !== undefined ? overrideGrowth / 100 : actualGrowth;
-      const modeledRevenue = prior12 > 0 ? prior12 * (1 + useGrowth) : trailing12;
 
-      // Monthly YoY breakdown
-      const months = Object.keys(byMonth).sort();
+      // Current model uses ACTUAL trailing 12 revenue
+      const actualRevenue = trailing12;
+      const currentFjord = calcCurrentFjord(storeKey, actualRevenue);
+      const currentModel = CURRENT_MODELS[storeKey];
+
+      // Proposed model uses prior year × hypothetical growth
+      const gRate = proposedGrowth / 100;
+      const proposedRevenue = prior12 > 0 ? prior12 * (1 + gRate) : actualRevenue;
+      const proposedBasePayout = calcProposedPayout(proposedRevenue);
+
+      let growthBonus = 0;
+      if (gRate > GROWTH_ACCEL_TIERS[0].above) {
+        for (const t of GROWTH_ACCEL_TIERS) {
+          if (gRate <= t.above) continue;
+          growthBonus += proposedRevenue * (Math.min(gRate, t.upTo) - t.above) * t.pct;
+        }
+      }
+      const proposedPayout = proposedBasePayout + growthBonus;
+      const proposedFjord = proposedRevenue - proposedPayout;
+
+      // Operator take-home estimate under proposed
+      const opCogs = proposedRevenue * 0.20;
+      const opPayroll = PROPOSED_STAFF[storeKey] * 25 * 52 * 1.25;
+      const opTakeHome = proposedPayout - opCogs - opPayroll;
+
+      // Monthly YoY breakdown (exclude incomplete months)
       const monthlyYoY = [];
-      months.forEach(m => {
+      const sortedMonths = Object.keys(byMonth).sort();
+      sortedMonths.forEach(m => {
+        if (m === lastMonth) return; // skip incomplete
         const [y, mo] = m.split('-');
         const priorKey = (parseInt(y) - 1) + '-' + mo;
         if (byMonth[priorKey]) {
@@ -795,61 +830,55 @@ function ModelComparison({ storeSales }) {
         }
       });
 
-      // Current model
-      const currentFjord = calcCurrentFjord(storeKey, modeledRevenue);
-      const currentModel = CURRENT_MODELS[storeKey];
-
-      // Proposed model
-      const proposedPayout = calcProposedPayout(modeledRevenue);
-      const proposedFjord = modeledRevenue - proposedPayout;
-
-      // Growth bonus under proposed
-      let growthBonus = 0;
-      if (useGrowth > GROWTH_ACCEL_TIERS[0].above) {
-        for (const t of GROWTH_ACCEL_TIERS) {
-          if (useGrowth <= t.above) continue;
-          growthBonus += modeledRevenue * (Math.min(useGrowth, t.upTo) - t.above) * t.pct;
-        }
-      }
-      const proposedPayoutWithBonus = proposedPayout + growthBonus;
-      const proposedFjordWithBonus = modeledRevenue - proposedPayoutWithBonus;
-
       return {
         storeKey,
-        trailing12,
+        actualRevenue,
         prior12,
         actualGrowth,
-        useGrowth,
-        isOverridden: overrideGrowth !== undefined,
-        modeledRevenue,
+        proposedRevenue,
         currentModel: currentModel.label,
         currentFjord,
-        proposedPayout: proposedPayoutWithBonus,
-        proposedFjord: proposedFjordWithBonus,
+        proposedPayout,
+        proposedFjord,
         growthBonus,
-        delta: proposedFjordWithBonus - currentFjord,
+        opTakeHome,
+        delta: proposedFjord - currentFjord,
         monthlyYoY,
       };
     }).filter(Boolean);
-  }, [storeSales, growthOverrides]);
+  }, [storeSales, proposedGrowth]);
 
   const totals = useMemo(() => {
-    let rev = 0, curFjord = 0, newFjord = 0;
-    analysis.forEach(a => { rev += a.modeledRevenue; curFjord += a.currentFjord; newFjord += a.proposedFjord; });
-    return { rev, curFjord, newFjord, delta: newFjord - curFjord };
+    let actRev = 0, propRev = 0, curFjord = 0, newFjord = 0, opTH = 0;
+    analysis.forEach(a => { actRev += a.actualRevenue; propRev += a.proposedRevenue; curFjord += a.currentFjord; newFjord += a.proposedFjord; opTH += a.opTakeHome; });
+    return { actRev, propRev, curFjord, newFjord, opTH, delta: newFjord - curFjord };
   }, [analysis]);
 
   return (
     <div>
       <div className="mb-5">
         <h1 className="text-xl font-bold" style={{color: NAVY}}>Model Comparison</h1>
-        <p className="text-sm mt-1" style={{color:'#6b7a99'}}>Current operating model vs proposed owner-operator model. Adjust growth rates to explore scenarios.</p>
+        <p className="text-sm mt-1" style={{color:'#6b7a99'}}>
+          What actually happened (current model) vs what would have happened with owner-operators at a hypothetical growth rate.
+          Last 12 complete months of data.
+        </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      {/* Growth Input + Summary */}
+      <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="rounded-xl p-4" style={{background:'white', border:`2px solid ${GOLD_ACCENT}`}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-2" style={{color:'#6b7a99'}}>Proposed YoY Growth</div>
+          <div className="flex items-center gap-2">
+            <input type="number" min="-20" max="50" step="1" value={proposedGrowth}
+              onChange={e => setProposedGrowth(Number(e.target.value))}
+              className="w-20 rounded-lg border px-3 py-2 text-lg font-bold text-center"
+              style={{borderColor: GOLD_ACCENT, color: NAVY}} />
+            <span className="text-lg font-bold" style={{color: NAVY}}>%</span>
+          </div>
+          <div className="text-xs mt-1" style={{color:'#8899aa'}}>Applied to all stores</div>
+        </div>
         {[
-          ['Total Revenue', fmt(totals.rev), '#445566', '#f7f9fc', '#dde4ed'],
+          ['Current Revenue', fmt(totals.actRev), '#445566', '#f7f9fc', '#dde4ed'],
           ['Current Fjord Net', fmt(totals.curFjord), '#1a6b8a', '#edf6fb', '#b3d9eb'],
           ['Proposed Fjord Net', fmt(totals.newFjord), GOLD_ACCENT, '#fdf8ec', '#e8d38a'],
           ['Delta', (totals.delta >= 0 ? '+' : '') + fmt(totals.delta), totals.delta >= 0 ? '#1a6b3a' : '#b5282a', totals.delta >= 0 ? '#edfaf2' : '#fef2f2', totals.delta >= 0 ? '#9dd4b5' : '#f5c6c6'],
@@ -861,76 +890,43 @@ function ModelComparison({ storeSales }) {
         ))}
       </div>
 
-      {/* Growth Rate Controls */}
-      <div className="rounded-xl p-5 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>YoY Growth Rate by Store</div>
-          <button onClick={() => setGrowthOverrides({})}
-            className="text-xs px-3 py-1 rounded-lg" style={{background:'#f0f4f8', color:'#6b7a99', border:'1px solid #dde4ed'}}>
-            Reset to Actuals
-          </button>
-        </div>
-        <div className="grid grid-cols-6 gap-4">
-          {analysis.map(a => {
-            const displayGrowth = a.isOverridden ? growthOverrides[a.storeKey] : Math.round(a.actualGrowth * 100);
-            return (
-              <div key={a.storeKey}>
-                <div className="text-xs font-medium mb-1" style={{color: NAVY}}>{STORE_LABELS[a.storeKey]}</div>
-                <div className="flex items-center gap-2">
-                  <input type="range" min="-20" max="40" step="1"
-                    value={displayGrowth}
-                    onChange={e => setGrowthOverrides(prev => ({...prev, [a.storeKey]: Number(e.target.value)}))}
-                    className="flex-1" style={{accentColor: a.useGrowth >= 0 ? '#1a6b3a' : '#b5282a'}} />
-                  <span className="text-sm font-bold w-12 text-right" style={{color: a.useGrowth > 0 ? '#1a6b3a' : a.useGrowth < 0 ? '#b5282a' : NAVY}}>
-                    {a.useGrowth > 0 ? '+' : ''}{(a.useGrowth * 100).toFixed(0)}%
-                  </span>
-                </div>
-                <div className="text-xs mt-1" style={{color: a.isOverridden ? '#8a5c1a' : '#8899aa'}}>
-                  {a.isOverridden ? 'Override' : 'Actual'}: {(a.actualGrowth * 100).toFixed(1)}%
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Comparison Table */}
       <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
         <table className="w-full text-xs">
           <thead>
             <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
-              <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Revenue</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>YoY</th>
-              <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Fjord Net</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb'}}>Margin</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Operator Payout</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Fjord Net</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#fdf8ec'}}>Margin</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
+              <th className="text-left px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Actual YoY</th>
+              <th className="text-left px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#edf6fb'}}>Revenue</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Fjord Net</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Revenue</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Op Payout</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Op Take-Home</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Fjord Net</th>
+              <th className="text-right px-3 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
             </tr>
           </thead>
           <tbody>
             {analysis.map(a => {
               const deltaColor = a.delta >= 0 ? '#1a6b3a' : '#b5282a';
+              const thColor = a.opTakeHome >= 70000 ? '#1a6b3a' : '#b5282a';
               return (
                 <tr key={a.storeKey} style={{borderBottom:'1px solid #eef1f6'}} className="hover:bg-blue-50/30">
-                  <td className="px-4 py-3 font-semibold" style={{color: NAVY}}>{STORE_LABELS[a.storeKey]}</td>
-                  <td className="px-4 py-3 text-right" style={{color:'#445566'}}>{fmt(a.modeledRevenue)}</td>
-                  <td className="px-4 py-3 text-right font-medium" style={{color: a.useGrowth > 0 ? '#1a6b3a' : a.useGrowth < 0 ? '#b5282a' : '#6b7a99'}}>
-                    {a.useGrowth > 0 ? '+' : ''}{(a.useGrowth * 100).toFixed(1)}%
+                  <td className="px-3 py-3 font-semibold" style={{color: NAVY}}>{STORE_LABELS[a.storeKey]}</td>
+                  <td className="px-3 py-3 text-right font-medium" style={{color: a.actualGrowth > 0 ? '#1a6b3a' : a.actualGrowth < 0 ? '#b5282a' : '#6b7a99'}}>
+                    {a.actualGrowth > 0 ? '+' : ''}{(a.actualGrowth * 100).toFixed(1)}%
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{a.currentModel}</td>
-                  <td className="px-4 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
-                  <td className="px-4 py-3 text-right" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{pct(a.currentFjord / a.modeledRevenue)}</td>
-                  <td className="px-4 py-3 text-right" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>
+                  <td className="px-3 py-3 text-xs" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{a.currentModel}</td>
+                  <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(237,246,251,0.4)'}}>{fmt(a.actualRevenue)}</td>
+                  <td className="px-3 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
+                  <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>{fmt(a.proposedRevenue)}</td>
+                  <td className="px-3 py-3 text-right" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>
                     {fmt(a.proposedPayout)}
-                    {a.growthBonus > 0 && <span className="text-xs" style={{color:'#1a6b3a'}}> (+{fmt(a.growthBonus)})</span>}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
-                  <td className="px-4 py-3 text-right" style={{color:'#6b7a99', background:'rgba(253,248,236,0.4)'}}>{pct(a.proposedFjord / a.modeledRevenue)}</td>
-                  <td className="px-4 py-3 text-right font-bold" style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
+                  <td className="px-3 py-3 text-right font-medium" style={{color: thColor, background:'rgba(253,248,236,0.4)'}}>{fmt(a.opTakeHome)}</td>
+                  <td className="px-3 py-3 text-right font-semibold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
+                  <td className="px-3 py-3 text-right font-bold" style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
                     {a.delta >= 0 ? '+' : ''}{fmt(a.delta)}
                   </td>
                 </tr>
@@ -939,16 +935,16 @@ function ModelComparison({ storeSales }) {
           </tbody>
           <tfoot>
             <tr style={{background:'#f0f4f8', borderTop:'2px solid ' + NAVY}}>
-              <td className="px-4 py-3 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>Total</td>
-              <td className="px-4 py-3 text-right font-bold" style={{color:'#445566'}}>{fmt(totals.rev)}</td>
-              <td className="px-4 py-3"></td>
-              <td className="px-4 py-3" style={{background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}></td>
-              <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
-              <td className="px-4 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(237,246,251,0.6)'}}>{pct(totals.curFjord / totals.rev)}</td>
-              <td className="px-4 py-3" style={{background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #e8d38a'}}></td>
-              <td className="px-4 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.newFjord)}</td>
-              <td className="px-4 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(253,248,236,0.6)'}}>{pct(totals.newFjord / totals.rev)}</td>
-              <td className="px-4 py-3 text-right font-bold" style={{color: totals.delta >= 0 ? '#1a6b3a' : '#b5282a', borderLeft:'2px solid #dde4ed'}}>
+              <td className="px-3 py-3 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>Total</td>
+              <td className="px-3 py-3"></td>
+              <td className="px-3 py-3" style={{background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}></td>
+              <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.actRev)}</td>
+              <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
+              <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #e8d38a'}}>{fmt(totals.propRev)}</td>
+              <td className="px-3 py-3" style={{background:'rgba(253,248,236,0.6)'}}></td>
+              <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(253,248,236,0.6)'}}>{fmt(totals.opTH)}</td>
+              <td className="px-3 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.newFjord)}</td>
+              <td className="px-3 py-3 text-right font-bold" style={{color: totals.delta >= 0 ? '#1a6b3a' : '#b5282a', borderLeft:'2px solid #dde4ed'}}>
                 {totals.delta >= 0 ? '+' : ''}{fmt(totals.delta)}
               </td>
             </tr>
