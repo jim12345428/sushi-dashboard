@@ -1798,9 +1798,9 @@ function RoadmapTab() {
     const tblHead = `<table><thead><tr><th style="width:3%">P</th><th style="width:4%">Qtr</th><th style="width:14%">Initiative</th><th style="width:17%">Details</th><th style="width:6%">Target</th><th style="width:6%">Expected</th><th style="width:7%">Status</th><th style="width:35%">Comment History</th><th style="width:8%">Cost</th></tr></thead><tbody>`;
 
     const categories = ['Operations', 'Marketing', 'Culinary', 'People'];
-    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fjord Roadmap</title>
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title> </title>
 <style>
-@page { size: landscape; margin: 0.4in; }
+@page { size: landscape; margin: 0.4in; margin-top: 0.2in; margin-bottom: 0.2in; }
 @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page-break { page-break-before: always; } }
 body { font-family: Garamond, 'EB Garamond', 'Times New Roman', serif; margin: 0; padding: 0; color: #1B2A4A; }
 .slide { padding: 20px 30px; position: relative; }
@@ -1808,7 +1808,6 @@ body { font-family: Garamond, 'EB Garamond', 'Times New Roman', serif; margin: 0
 .title-line { height: 2px; background: #1B2A4A; margin-bottom: 16px; }
 .section-label { font-size: 13pt; color: #1B2A4A; font-weight: bold; margin: 14px 0 6px 0; }
 .completed-label { font-size: 13pt; color: #1a6b3a; font-weight: bold; margin: 18px 0 6px 0; border-top: 1px solid #D0D5DD; padding-top: 10px; }
-.footer { position: fixed; bottom: 0; left: 0; right: 0; height: 30px; background: #1B2A4A; }
 table { width: 100%; border-collapse: collapse; font-size: 10pt; }
 th { background: #1B2A4A; color: white; padding: 5px 6px; font-size: 10pt; text-align: center; font-weight: bold; }
 td { padding: 4px 6px; border: 1px solid #D0D5DD; vertical-align: top; font-size: 10pt; }
@@ -1857,7 +1856,7 @@ td.center { text-align: center; }
       html += `</div>`;
     });
 
-    html += `<div class="footer"></div></body></html>`;
+    html += `</body></html>`;
 
     const printWin = window.open('', '_blank');
     printWin.document.write(html);
