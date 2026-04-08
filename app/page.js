@@ -878,6 +878,34 @@ function ModelComparison({ storeSales }) {
         </p>
       </div>
 
+      {/* Key Assumptions */}
+      <div className="rounded-xl p-4 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>Key Assumptions</div>
+        <div className="grid grid-cols-4 gap-x-6 gap-y-1 text-xs">
+          {[
+            ['Analysis period', 'Apr 2025 \u2013 Mar 2026'],
+            ['Store hours', '62 hrs/wk (Mon\u2013Sat 9hrs, Sun 8hrs)'],
+            ['Crew size', '2 people (high-vol), 1 person (BK/LA)'],
+            ['Operator hours', '50 hrs/wk across 6 days'],
+            ['Staff rate', '$25/hr + 25% burden ($31.25 loaded)'],
+            ['Overtime', '10 hrs/wk @ 1.5x per employee'],
+            ['Temp rate (current)', '$335/day ($37.22/hr)'],
+            ['Proposed tiers', '62% / 55% / 49% / 43%'],
+            ['Growth accel.', '10% (5\u201315%), 18% (15\u201325%), 25% (25%+)'],
+            ['Payout lag', '21 days via ACH'],
+            ['In-house COGS', '18% of revenue (current model)'],
+            ['Brooklyn concession', '70% to operator'],
+            ['Darien concession', '52.5% to operator'],
+            ['New Canaan current', '2 employees @ 50 hrs + temps for gap'],
+          ].map(([label, val]) => (
+            <div key={label} className="flex justify-between py-0.5" style={{borderBottom:'1px solid #f0f4f8'}}>
+              <span style={{color:'#8899aa'}}>{label}</span>
+              <strong style={{color: NAVY}}>{val}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
