@@ -1622,8 +1622,6 @@ function RoadmapTab() {
   const [subItems, setSubItems] = useState({});
   const [showSubForm, setShowSubForm] = useState({});
   const [subDraft, setSubDraft] = useState({});
-  const [weeklyComments, setWeeklyComments] = useState([]); // [{ text, date, quarter }]
-  const [weeklyDraft, setWeeklyDraft] = useState('');
 
   function getTimeline(item) {
     if (completed[item.id]) return { label: 'Done', color: '#1a6b3a', bg: '#edfaf2', border: '#9dd4b5' };
@@ -1726,17 +1724,6 @@ function RoadmapTab() {
     }));
   }
 
-  function postWeeklyComment() {
-    if (!weeklyDraft.trim()) return;
-    setWeeklyComments(prev => [...prev, {
-      text: weeklyDraft.trim(),
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      timestamp: Date.now(),
-      quarter: activeQuarter,
-    }]);
-    setWeeklyDraft('');
-  }
-
   async function exportRoadmapPptx() {
     const pptxgen = (await import('pptxgenjs')).default;
     const prs = new pptxgen();
@@ -1751,17 +1738,6 @@ function RoadmapTab() {
     slide.addText('Fjord Fish Market', { x: 0.8, y: 1.5, fontSize: 16, color: gold });
     slide.addText('Operational Roadmap \u2014 ' + activeQuarter, { x: 0.8, y: 2.2, fontSize: 32, color: white, bold: true });
     slide.addText('Board Update \u2014 ' + new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), { x: 0.8, y: 3.5, fontSize: 14, color: '8899aa' });
-
-    // Weekly commentary slide (if any)
-    const qComments = weeklyComments.filter(c => c.quarter === activeQuarter);
-    if (qComments.length > 0) {
-      slide = prs.addSlide();
-      slide.addText('Weekly Commentary', { x: 0.5, y: 0.3, fontSize: 24, bold: true, color: navy });
-      qComments.slice(-5).forEach((c, i) => {
-        slide.addText(c.date, { x: 0.5, y: 1.0 + i * 0.9, fontSize: 9, bold: true, color: '6b7a99' });
-        slide.addText(c.text, { x: 0.5, y: 1.3 + i * 0.9, w: 12, fontSize: 11, color: '445566' });
-      });
-    }
 
     // Active items by section
     const sections = Object.entries(activeSections);
@@ -2139,41 +2115,6 @@ function RoadmapTab() {
           <option value="All">All Categories</option>
           {ROADMAP_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-      </div>
-
-      {/* Weekly Commentary */}
-      <div className="rounded-xl mb-6 overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
-        <div className="px-4 py-3 flex items-center justify-between" style={{background: NAVY}}>
-          <div className="text-sm font-bold text-white">Weekly Commentary &mdash; {activeQuarter}</div>
-          <div className="text-xs" style={{color:'rgba(255,255,255,0.4)'}}>
-            {weeklyComments.filter(c => c.quarter === activeQuarter).length} updates
-          </div>
-        </div>
-        <div className="p-4">
-          {/* Previous weekly comments */}
-          {weeklyComments.filter(c => c.quarter === activeQuarter).length > 0 && (
-            <div className="space-y-3 mb-4">
-              {weeklyComments.filter(c => c.quarter === activeQuarter).map((c, i) => (
-                <div key={i} className="flex gap-3 text-sm py-2" style={{borderBottom:'1px solid #eef1f6'}}>
-                  <div className="flex-shrink-0 w-24 text-xs font-medium" style={{color:'#6b7a99'}}>{c.date}</div>
-                  <div style={{color:'#445566'}}>{c.text}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* New weekly comment */}
-          <div className="flex gap-2">
-            <textarea value={weeklyDraft} rows={2} placeholder="How was the week? What should the board know?"
-              onChange={e => setWeeklyDraft(e.target.value)}
-              className="flex-1 text-sm rounded-lg border px-3 py-2 resize-none"
-              style={{borderColor:'#dde4ed', color: NAVY}} />
-            <button onClick={postWeeklyComment} disabled={!weeklyDraft.trim()}
-              className="px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40 self-end"
-              style={{background: NAVY}}>
-              Post
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Two-column layout */}
