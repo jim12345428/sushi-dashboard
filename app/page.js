@@ -14,15 +14,18 @@ const STORE_LABELS = {
 
 /* ── COMPENSATION MODEL ── */
 const BASE_TIERS = [
-  { upTo: 400000, pct: 0.52 },
-  { upTo: 700000, pct: 0.40 },
-  { upTo: Infinity, pct: 0.25 },
+  { upTo: 300000, pct: 0.59 },
+  { upTo: 500000, pct: 0.45 },
+  { upTo: 700000, pct: 0.33 },
+  { upTo: Infinity, pct: 0.21 },
 ];
-const GROWTH_THRESHOLD = 0.05;
-const GROWTH_ACCEL_PCT = 0.15;
+const GROWTH_ACCEL_TIERS = [
+  { above: 0.05, upTo: 0.15, pct: 0.10 },
+  { above: 0.15, upTo: 0.25, pct: 0.18 },
+  { above: 0.25, upTo: Infinity, pct: 0.25 },
+];
 
 function calcTieredShare(annualizedRevenue, dailyGross) {
-  // Calculate effective blended rate from tiers applied to annualized revenue
   let totalShare = 0, prev = 0;
   for (const t of BASE_TIERS) {
     const tierRev = Math.min(annualizedRevenue, t.upTo) - prev;
@@ -37,9 +40,14 @@ function calcTieredShare(annualizedRevenue, dailyGross) {
 function calcGrowthBonus(dailyGross, priorYearDayGross) {
   if (!priorYearDayGross || priorYearDayGross <= 0) return 0;
   const growthRate = (dailyGross - priorYearDayGross) / priorYearDayGross;
-  if (growthRate <= GROWTH_THRESHOLD) return 0;
-  const thresholdValue = priorYearDayGross * (1 + GROWTH_THRESHOLD);
-  return (dailyGross - thresholdValue) * GROWTH_ACCEL_PCT;
+  if (growthRate <= GROWTH_ACCEL_TIERS[0].above) return 0;
+  let bonus = 0;
+  for (const t of GROWTH_ACCEL_TIERS) {
+    if (growthRate <= t.above) continue;
+    const applicableGrowth = Math.min(growthRate, t.upTo) - t.above;
+    bonus += priorYearDayGross * applicableGrowth * t.pct;
+  }
+  return bonus;
 }
 
 /* ── HELPERS ── */
@@ -275,7 +283,7 @@ function InvoicesTab({ invoices, store }) {
 function ScenarioModeler({ storeSales }) {
   const [cogsRate, setCogsRate] = useState(20);
   const [staffHrs, setStaffHrs] = useState({
-    brooklyn: 0, 'cos cob': 30, darien: 25, larchmont: 0, 'new canaan': 25, westport: 20,
+    brooklyn: 9, 'cos cob': 30, darien: 25, larchmont: 9, 'new canaan': 25, westport: 20,
   });
   const [staffRate, setStaffRate] = useState(25);
   const [growthPct, setGrowthPct] = useState(0);
@@ -299,11 +307,15 @@ function ScenarioModeler({ storeSales }) {
         prev = t.upTo;
       }
 
-      // Growth accelerator
+      // Growth accelerator (tiered)
       let accelBonus = 0;
-      if (growthPct / 100 > GROWTH_THRESHOLD) {
-        const thresholdRev = annualized * (1 + GROWTH_THRESHOLD);
-        accelBonus = (grownAnnual - thresholdRev) * GROWTH_ACCEL_PCT;
+      const gRate = growthPct / 100;
+      if (gRate > GROWTH_ACCEL_TIERS[0].above) {
+        for (const t of GROWTH_ACCEL_TIERS) {
+          if (gRate <= t.above) continue;
+          const applicableGrowth = Math.min(gRate, t.upTo) - t.above;
+          accelBonus += annualized * applicableGrowth * t.pct;
+        }
       }
 
       const totalShare = tieredTotal + accelBonus;
@@ -508,29 +520,33 @@ function ScenarioModeler({ storeSales }) {
         <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>Compensation Structure</div>
         <div className="grid grid-cols-2 gap-6">
           <div>
-            <div className="text-xs font-medium mb-2" style={{color: NAVY}}>Base Revenue Share (Tiered)</div>
+            <div className="text-xs font-medium mb-2" style={{color: NAVY}}>Base Revenue Share (4 Tiers)</div>
             <div className="space-y-1">
-              {BASE_TIERS.map((t, i) => (
-                <div key={i} className="flex justify-between text-xs py-1" style={{borderBottom:'1px solid #eef1f6'}}>
-                  <span style={{color:'#8899aa'}}>
-                    {i === 0 ? 'First' : 'Next'} {t.upTo === Infinity ? '$700k+' : '$' + (t.upTo/1000) + 'k'}
-                  </span>
-                  <strong style={{color: NAVY}}>{(t.pct * 100)}%</strong>
-                </div>
-              ))}
+              {BASE_TIERS.map((t, i) => {
+                const prevUpTo = i > 0 ? BASE_TIERS[i-1].upTo : 0;
+                const label = t.upTo === Infinity
+                  ? '$' + (prevUpTo/1000) + 'k+'
+                  : (i === 0 ? 'First $' + (t.upTo/1000) + 'k' : '$' + (prevUpTo/1000) + 'k - $' + (t.upTo/1000) + 'k');
+                return (
+                  <div key={i} className="flex justify-between text-xs py-1" style={{borderBottom:'1px solid #eef1f6'}}>
+                    <span style={{color:'#8899aa'}}>{label}</span>
+                    <strong style={{color: NAVY}}>{(t.pct * 100)}%</strong>
+                  </div>
+                );
+              })}
             </div>
           </div>
           <div>
-            <div className="text-xs font-medium mb-2" style={{color: NAVY}}>YoY Growth Accelerator</div>
+            <div className="text-xs font-medium mb-2" style={{color: NAVY}}>YoY Growth Accelerator (Tiered)</div>
             <div className="space-y-1">
-              <div className="flex justify-between text-xs py-1" style={{borderBottom:'1px solid #eef1f6'}}>
-                <span style={{color:'#8899aa'}}>Threshold</span>
-                <strong style={{color: NAVY}}>{(GROWTH_THRESHOLD * 100)}% YoY</strong>
-              </div>
-              <div className="flex justify-between text-xs py-1" style={{borderBottom:'1px solid #eef1f6'}}>
-                <span style={{color:'#8899aa'}}>Bonus on incremental revenue</span>
-                <strong style={{color: NAVY}}>{(GROWTH_ACCEL_PCT * 100)}%</strong>
-              </div>
+              {GROWTH_ACCEL_TIERS.map((t, i) => (
+                <div key={i} className="flex justify-between text-xs py-1" style={{borderBottom:'1px solid #eef1f6'}}>
+                  <span style={{color:'#8899aa'}}>
+                    {t.upTo === Infinity ? (t.above*100) + '%+ YoY' : (t.above*100) + '-' + (t.upTo*100) + '% YoY'}
+                  </span>
+                  <strong style={{color: NAVY}}>+{(t.pct * 100)}%</strong>
+                </div>
+              ))}
               <div className="flex justify-between text-xs py-1" style={{borderBottom:'1px solid #eef1f6'}}>
                 <span style={{color:'#8899aa'}}>Payout lag</span>
                 <strong style={{color: NAVY}}>21 days</strong>
@@ -713,8 +729,8 @@ export default function Dashboard() {
 
               <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{color:'#6b7a99'}}>Comp Structure</div>
               {[
-                ['Base tiers', '52/40/25%'],
-                ['Growth bonus', '15% > 5% YoY'],
+                ['Base tiers', '59/45/33/21%'],
+                ['Growth bonus', 'Tiered > 5% YoY'],
                 ['Eff. rate (30d)', pct(avgEffRate)],
                 ['Payment lag', '21 days'],
                 ['COGS estimate', pct(cogsRate)],
@@ -774,35 +790,41 @@ export default function Dashboard() {
               {/* How It Works */}
               <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
                 <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>How the Revenue Share Works</h2>
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
-                    <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>52%</div>
-                    <div className="text-xs mt-1" style={{color:'#6b7a99'}}>First $400k revenue</div>
-                  </div>
-                  <div className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
-                    <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>40%</div>
-                    <div className="text-xs mt-1" style={{color:'#6b7a99'}}>$400k &ndash; $700k revenue</div>
-                  </div>
-                  <div className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
-                    <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>25%</div>
-                    <div className="text-xs mt-1" style={{color:'#6b7a99'}}>Above $700k revenue</div>
-                  </div>
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  {[
+                    ['59%', 'First $300k'],
+                    ['45%', '$300k \u2013 $500k'],
+                    ['33%', '$500k \u2013 $700k'],
+                    ['21%', 'Above $700k'],
+                  ].map(([rate, range]) => (
+                    <div key={rate} className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                      <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>{rate}</div>
+                      <div className="text-xs mt-1" style={{color:'#6b7a99'}}>{range}</div>
+                    </div>
+                  ))}
                 </div>
                 <div className="rounded-lg p-4 mb-4" style={{background:'#edfaf2', border:'1px solid #9dd4b5'}}>
-                  <div className="flex items-center gap-3">
-                    <div className="text-2xl font-bold" style={{color:'#1a6b3a'}}>+15%</div>
-                    <div>
-                      <div className="text-sm font-bold" style={{color:'#1a6b3a'}}>YoY Growth Accelerator</div>
-                      <div className="text-xs" style={{color:'#6b7a99'}}>
-                        On all incremental revenue above 5% year-over-year growth. Rewards operators who actively grow the business.
+                  <div className="text-sm font-bold mb-2" style={{color:'#1a6b3a'}}>YoY Growth Accelerator (Tiered)</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      ['+10%', '5\u201315% YoY growth'],
+                      ['+18%', '15\u201325% YoY growth'],
+                      ['+25%', '25%+ YoY growth'],
+                    ].map(([bonus, range]) => (
+                      <div key={bonus} className="rounded-lg p-3 text-center" style={{background:'white', border:'1px solid #9dd4b5'}}>
+                        <div className="text-lg font-bold" style={{color:'#1a6b3a'}}>{bonus}</div>
+                        <div className="text-xs" style={{color:'#6b7a99'}}>{range}</div>
                       </div>
-                    </div>
+                    ))}
+                  </div>
+                  <div className="text-xs mt-2" style={{color:'#6b7a99'}}>
+                    Bonus applied to incremental revenue within each growth band. The harder you grow, the more you earn per incremental dollar.
                   </div>
                 </div>
                 <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>
-                  <strong style={{color: NAVY}}>Example:</strong> A store doing $700k/year pays the operator: ($400k &times; 52%) + ($300k &times; 40%) = $208k + $120k = $328k.
-                  If that store grew 15% YoY, the operator also earns 15% on the incremental revenue above the 5% threshold:
-                  $700k &times; 10% &times; 15% = $10,500 growth bonus. Total payout: $338,500.
+                  <strong style={{color: NAVY}}>Example:</strong> A store doing $700k/year pays the operator: ($300k &times; 59%) + ($200k &times; 45%) + ($200k &times; 33%) = $177k + $90k + $66k = $333k.
+                  If that store grew 20% YoY, the operator earns growth bonuses: 10% on the 5&ndash;15% band ($700k &times; 10% &times; 10% = $7k) plus
+                  18% on the 15&ndash;20% band ($700k &times; 5% &times; 18% = $6.3k) = $13.3k bonus. Total payout: $346.3k.
                 </div>
               </div>
 
@@ -836,8 +858,8 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   {[
                     ['Owner-Operator', 'An independent business owner (LLC) who runs a sushi concession inside a Fjord location. Expected to work 50+ hours/week in-store.'],
-                    ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a tiered structure (52% / 40% / 25%) applied to annualized revenue.'],
-                    ['Growth Accelerator', 'A 15% bonus on incremental revenue above 5% year-over-year growth, paid on top of the base revenue share.'],
+                    ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a 4-tier structure (59% / 45% / 33% / 21%) with breakpoints at $300k, $500k, and $700k annualized revenue.'],
+                    ['Growth Accelerator', 'A tiered bonus on incremental revenue above 5% YoY growth: 10% on 5-15% growth, 18% on 15-25% growth, 25% on 25%+ growth. Rewards aggressive growth disproportionately.'],
                     ['COGS (Cost of Goods Sold)', 'Ingredients, packaging, and supplies. Estimated at 20% of revenue. Paid by the operator from their revenue share.'],
                     ['Payroll', 'Wages for any additional staff the operator hires, plus ~25% burden (FICA, SUTA/FUTA, workers comp). Paid by the operator from their share.'],
                     ['21-Day Float', 'The lag between when a sale occurs and when the operator receives their payout. Fjord holds funds for 21 days after credit card settlement.'],
@@ -916,7 +938,7 @@ export default function Dashboard() {
               <div className="rounded-lg p-3 mb-5 flex items-center gap-2 text-xs"
                 style={{background:'#fdf8ec', border:'1px solid #e8d38a', color:'#7a5a1a'}}>
                 <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                Amounts based on tiered revenue share (52/40/25%). Growth accelerator applies when YoY growth exceeds 5%.
+                Amounts based on tiered revenue share (59/45/33/21%). Tiered growth accelerator applies when YoY growth exceeds 5%.
               </div>
               <div className="space-y-2">
                 {unpaid.map((r, i) => {
