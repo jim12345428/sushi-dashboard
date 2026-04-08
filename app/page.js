@@ -1618,6 +1618,7 @@ function RoadmapTab() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', detail: '', quarter: 'Q2 2026', category: 'Operations', target: '', cost: '' });
   const [activeQuarter, setActiveQuarter] = useState('Q1 2026');
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [subItems, setSubItems] = useState({}); // { parentId: [{ id, name, status }] }
   const [showSubForm, setShowSubForm] = useState({}); // { parentId: bool }
   const [subDraft, setSubDraft] = useState({}); // { parentId: string }
@@ -1932,13 +1933,13 @@ function RoadmapTab() {
   // Get active quarter data
   const activeQ = mergedData.find(q => q.quarter === activeQuarter) || mergedData[0];
 
-  // Split items into completed and active for the selected quarter
+  // Split items into completed and active for the selected quarter, filtered by category
   const completedItems = [];
   const activeItems = [];
   if (activeQ) {
     activeQ.sections.forEach(section => {
+      if (categoryFilter !== 'All' && section.title !== categoryFilter) return;
       section.items.forEach(item => {
-        const isComplete = completed[item.id] || item.status === 'complete' && completed[item.id] !== false;
         if (completed[item.id]) {
           completedItems.push({ ...item, sectionTitle: section.title });
         } else {
@@ -2031,22 +2032,27 @@ function RoadmapTab() {
         </div>
       )}
 
-      {/* Quarter Tabs */}
-      <div className="flex gap-1 mb-6">
-        {mergedData.map(q => (
-          <button key={q.quarter} onClick={() => setActiveQuarter(q.quarter)}
-            className="px-5 py-2 rounded-lg text-xs font-semibold transition-all"
-            style={{
-              background: activeQuarter === q.quarter ? q.color : '#f0f4f8',
-              color: activeQuarter === q.quarter ? 'white' : '#6b7a99',
-              border: '1px solid ' + (activeQuarter === q.quarter ? q.color : '#dde4ed'),
-            }}>
-            {q.quarter}
-            <span className="ml-2 opacity-60">
-              ({activeQ && q.quarter === activeQuarter ? activeItems.length + ' active' : ''})
-            </span>
-          </button>
-        ))}
+      {/* Quarter Tabs + Category Filter */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex gap-1">
+          {mergedData.map(q => (
+            <button key={q.quarter} onClick={() => setActiveQuarter(q.quarter)}
+              className="px-5 py-2 rounded-lg text-xs font-semibold transition-all"
+              style={{
+                background: activeQuarter === q.quarter ? q.color : '#f0f4f8',
+                color: activeQuarter === q.quarter ? 'white' : '#6b7a99',
+                border: '1px solid ' + (activeQuarter === q.quarter ? q.color : '#dde4ed'),
+              }}>
+              {q.quarter}
+            </button>
+          ))}
+        </div>
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+          className="rounded-lg border px-3 py-2 text-xs font-semibold"
+          style={{borderColor:'#dde4ed', color: NAVY}}>
+          <option value="All">All Categories</option>
+          {ROADMAP_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
       {/* Two-column layout */}
