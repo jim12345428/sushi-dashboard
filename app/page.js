@@ -763,11 +763,54 @@ function calcProposedOperatorCosts(storeKey, revenue, cogsRate) {
   return { cogs, payroll };
 }
 
+const ANALYSIS_MONTHS = [
+  '2025-04','2025-05','2025-06','2025-07','2025-08','2025-09',
+  '2025-10','2025-11','2025-12','2026-01','2026-02','2026-03',
+];
+const PRIOR_MONTHS = [
+  '2024-04','2024-05','2024-06','2024-07','2024-08','2024-09',
+  '2024-10','2024-11','2024-12','2025-01','2025-02','2025-03',
+];
+
+function calcActualGrowthRates(storeSales) {
+  const rates = {};
+  STORES.forEach(storeKey => {
+    const sales = storeSales[storeKey] || [];
+    const byMonth = {};
+    sales.forEach(s => {
+      const d = new Date(s.date);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      byMonth[key] = (byMonth[key] || 0) + s.gross;
+    });
+    let trailing = 0, prior = 0;
+    ANALYSIS_MONTHS.forEach(m => { trailing += byMonth[m] || 0; });
+    PRIOR_MONTHS.forEach(m => { prior += byMonth[m] || 0; });
+    rates[storeKey] = prior > 0 ? (trailing - prior) / prior : 0;
+  });
+  return rates;
+}
+
 function ModelComparison({ storeSales }) {
-  const defaultGrowth = () => Object.fromEntries(STORES.map(s => [s, 10]));
-  const [storeGrowth, setStoreGrowth] = useState(defaultGrowth);
+  const actualRates = useMemo(() => calcActualGrowthRates(storeSales), [storeSales]);
+
+  const [storeGrowth, setStoreGrowth] = useState({});
+  const [initialized, setInitialized] = useState(false);
   const [opCogsRate, setOpCogsRate] = useState(20);
   const [concCogsRate, setConcCogsRate] = useState(20);
+
+  // Set defaults once data loads: 6% floor, otherwise actual YoY
+  useEffect(() => {
+    if (initialized) return;
+    const hasData = Object.values(actualRates).some(r => r !== 0);
+    if (!hasData) return;
+    const defaults = {};
+    STORES.forEach(s => {
+      const actual = Math.round(actualRates[s] * 100);
+      defaults[s] = actual < 6 ? 6 : actual;
+    });
+    setStoreGrowth(defaults);
+    setInitialized(true);
+  }, [actualRates, initialized]);
 
   const analysis = useMemo(() => {
     return STORES.map(storeKey => {
@@ -783,15 +826,6 @@ function ModelComparison({ storeSales }) {
       });
 
       // Fixed analysis period: April 2025 - March 2026
-      const ANALYSIS_MONTHS = [
-        '2025-04','2025-05','2025-06','2025-07','2025-08','2025-09',
-        '2025-10','2025-11','2025-12','2026-01','2026-02','2026-03',
-      ];
-      const PRIOR_MONTHS = [
-        '2024-04','2024-05','2024-06','2024-07','2024-08','2024-09',
-        '2024-10','2024-11','2024-12','2025-01','2025-02','2025-03',
-      ];
-
       let trailing12 = 0, prior12 = 0;
       ANALYSIS_MONTHS.forEach(m => { trailing12 += byMonth[m] || 0; });
       PRIOR_MONTHS.forEach(m => { prior12 += byMonth[m] || 0; });
@@ -932,9 +966,13 @@ function ModelComparison({ storeSales }) {
           />
           <span className="text-sm font-bold" style={{color:'#6b7a99'}}>% YoY</span>
         </div>
-        <button onClick={() => setStoreGrowth(defaultGrowth())}
+        <button onClick={() => {
+            const defaults = {};
+            STORES.forEach(s => { const a = Math.round(actualRates[s] * 100); defaults[s] = a < 6 ? 6 : a; });
+            setStoreGrowth(defaults);
+          }}
           className="text-xs px-3 py-1 rounded-lg ml-2" style={{background:'#f0f4f8', color:'#6b7a99', border:'1px solid #dde4ed'}}>
-          Reset to 10%
+          Reset to Defaults
         </button>
         <div className="ml-auto flex items-center gap-4">
           <div className="flex items-center gap-1">
