@@ -736,20 +736,22 @@ function calcCurrentCosts(storeKey, revenue, concessionCogsRate, convertTempsToS
   const WEEKS = 52, EMP_RATE = 25, TEMP_DAY = 335;
   const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.14;
   const empAnnual = empWeekly * WEEKS;
-  const totalEmpHrs = m.emps * m.empHrs;
-  const needed = storePersonHrs(storeKey);
+
+  // Temp days: each employee works 6 days/wk covering 1 position
+  // A 2-person store needs 14 person-days/wk (7 days x 2), a 1-person store needs 7
+  const personDaysNeeded = CREW_SIZE[storeKey] * 7;
+  const empDaysCovered = m.emps * 6; // each emp works 6 days
+  const tempDaysPerWeek = m.emps === 0 ? 7 : Math.max(0, personDaysNeeded - empDaysCovered);
 
   let empLabor, tempLabor;
-  const gapHrs = m.emps === 0 ? 0 : Math.max(0, needed - totalEmpHrs);
-  const tempHrs = m.emps === 0 ? needed : gapHrs;
   if (convertTempsToStaff) {
-    // Replace temp hours at employee loaded rate ($25/hr + 14% burden)
-    const loadedRate = EMP_RATE * 1.14;
-    empLabor = m.emps * empAnnual + tempHrs * loadedRate * WEEKS;
+    // Replace temp days with internal employees (each covers 6 days/wk at 50 hrs)
+    const totalEmpsNeeded = Math.ceil(personDaysNeeded / 6);
+    empLabor = totalEmpsNeeded * empAnnual;
     tempLabor = 0;
   } else {
     empLabor = m.emps * empAnnual;
-    tempLabor = m.emps === 0 ? 7 * TEMP_DAY * WEEKS : gapHrs * (TEMP_DAY / 9) * WEEKS;
+    tempLabor = tempDaysPerWeek * TEMP_DAY * WEEKS;
   }
   const labor = empLabor + tempLabor;
   const cogs = revenue * m.cogsRate;
@@ -958,7 +960,7 @@ function ModelComparison({ storeSales }) {
             <span style={{color: NAVY, fontWeight: 600}}>Convert all temp staffing to internal employees in current model</span>
           </label>
           <span className="text-xs" style={{color:'#8899aa'}}>
-            {convertTemps ? '(temps replaced at $25/hr + 14% burden = $28.50/hr loaded)' : '(using actual temp rates @ $335/day = $37.22/hr)'}
+            {convertTemps ? '(temp days replaced with employees at $25/hr + OT + 14% burden)' : '(using actual temp flat rate @ $335/day)'}
           </span>
         </div>
       </div>
@@ -1064,7 +1066,7 @@ function ModelComparison({ storeSales }) {
                     </td>
                     <td className="px-3 py-3 text-right" title={'Actual POS revenue Apr 2025 - Mar 2026'} style={{color:'#445566', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmt(a.actualRevenue)}</td>
                     <td className="px-3 py-3 text-right" title={a.curEmpLabor > 0 ? (a.isConcession ? 'N/A - concession' : CURRENT_MODELS[a.storeKey].emps + ' employee(s) x 50 hrs/wk (40 reg + 10 OT @ 1.5x) x $25/hr x 14% burden x 52 wks') : 'No employees - ' + (a.isConcession ? 'concession model' : 'all temps')} style={{color:'#3a4a8a', background:'rgba(237,246,251,0.4)'}}>{a.curEmpLabor > 0 ? fmt(a.curEmpLabor) : '-'}</td>
-                    <td className="px-3 py-3 text-right" title={a.curTempLabor > 0 ? 'Gap hours covered by temps @ $335/day ($37.22/hr). ' + (storePersonHrs(a.storeKey) - (CURRENT_MODELS[a.storeKey].emps || 0) * 50) + ' hrs/wk x $37.22 x 52 wks' : a.isConcession ? 'N/A - concession' : 'No temp coverage needed'} style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{a.curTempLabor > 0 ? fmt(a.curTempLabor) : '-'}</td>
+                    <td className="px-3 py-3 text-right" title={a.curTempLabor > 0 ? 'Temps @ $335/day flat rate. ' + (CREW_SIZE[a.storeKey] * 7 - (CURRENT_MODELS[a.storeKey].emps || 0) * 6) + ' temp days/wk x $335 x 52 wks' : a.isConcession ? 'N/A - concession' : 'No temp coverage needed'} style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{a.curTempLabor > 0 ? fmt(a.curTempLabor) : '-'}</td>
                     <td className="px-3 py-3 text-right" title={a.curCogs > 0 ? 'Fjord pays COGS at 18% of revenue. ' + fmt(a.actualRevenue) + ' x 18%' : 'Operator pays own COGS under concession model'} style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{a.curCogs > 0 ? fmt(a.curCogs) : '-'}</td>
                     <td className="px-3 py-3 text-right font-semibold" title={a.isConcession ? 'Revenue - operator payout (' + (CURRENT_MODELS[a.storeKey].pct * 100) + '%). Fjord keeps ' + pct(1 - CURRENT_MODELS[a.storeKey].pct) : 'Revenue - employee labor - temp labor - COGS'} style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
                     <td className="px-3 py-3 text-right" title={a.curOpCogs != null ? 'Concession operator COGS at ' + concCogsRate + '% of revenue' : 'N/A - Fjord pays COGS in-house'} style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>
