@@ -17,7 +17,7 @@ export async function GET() {
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
     const headerIdx = rows.findIndex(r =>
-      r.some(c => c?.toString().toLowerCase() === 'date')
+      r.some(c => c?.toString().toLowerCase().includes('date'))
     );
     if (headerIdx < 0) return NextResponse.json({ stores: {} });
 
