@@ -37,17 +37,16 @@ function calcTieredShare(annualizedRevenue, dailyGross) {
   return dailyGross * effectiveRate;
 }
 
-function calcGrowthBonus(dailyGross, priorYearDayGross) {
-  if (!priorYearDayGross || priorYearDayGross <= 0) return 0;
-  const growthRate = (dailyGross - priorYearDayGross) / priorYearDayGross;
-  if (growthRate <= GROWTH_ACCEL_TIERS[0].above) return 0;
-  let bonus = 0;
+function calcGrowthBonusFromRate(dailyGross, trailingGrowthRate) {
+  if (trailingGrowthRate <= GROWTH_ACCEL_TIERS[0].above) return 0;
+  // Bonus is a multiplier on dailyGross based on the trailing growth rate
+  let bonusRate = 0;
   for (const t of GROWTH_ACCEL_TIERS) {
-    if (growthRate <= t.above) continue;
-    const applicableGrowth = Math.min(growthRate, t.upTo) - t.above;
-    bonus += priorYearDayGross * applicableGrowth * t.pct;
+    if (trailingGrowthRate <= t.above) continue;
+    const applicableGrowth = Math.min(trailingGrowthRate, t.upTo) - t.above;
+    bonusRate += applicableGrowth * t.pct;
   }
-  return bonus;
+  return dailyGross * bonusRate;
 }
 
 /* ── HELPERS ── */
@@ -69,16 +68,6 @@ function buildLedger(sales, payrollWeeks, invoices, cogsRate) {
   const posMap = {};
   sales.forEach(s => posMap[s.date] = s.gross);
 
-  // Build a map of same-day-last-year for growth accelerator
-  const priorYearMap = {};
-  sales.forEach(s => {
-    const d = new Date(s.date);
-    const priorDate = new Date(d);
-    priorDate.setFullYear(priorDate.getFullYear() + 1);
-    const key = priorDate.toISOString().split('T')[0];
-    priorYearMap[key] = s.gross;
-  });
-
   // Annualize: rolling 365-day revenue
   const sortedDates = Object.keys(posMap).sort();
   const annualizedMap = {};
@@ -97,6 +86,34 @@ function buildLedger(sales, payrollWeeks, invoices, cogsRate) {
     }
     const daysInWindow = window.length;
     annualizedMap[d] = daysInWindow > 0 ? (rollingSum / daysInWindow) * 365 : 0;
+  }
+
+  // Trailing 90-day growth rate vs same 90 days prior year
+  const TRAIL_DAYS = 90;
+  const trailingGrowthMap = {};
+  for (let i = 0; i < sortedDates.length; i++) {
+    const d = sortedDates[i];
+    const endDate = new Date(d);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - TRAIL_DAYS + 1);
+
+    let currentSum = 0, priorSum = 0, hasPrior = false;
+    for (let j = Math.max(0, i - TRAIL_DAYS + 1); j <= i; j++) {
+      const dd = sortedDates[j];
+      if (new Date(dd) < startDate) continue;
+      currentSum += posMap[dd];
+      // Find same day prior year
+      const priorDate = new Date(dd);
+      priorDate.setFullYear(priorDate.getFullYear() - 1);
+      const priorKey = priorDate.toISOString().split('T')[0];
+      if (posMap[priorKey]) {
+        priorSum += posMap[priorKey];
+        hasPrior = true;
+      }
+    }
+    trailingGrowthMap[d] = hasPrior && priorSum > 0
+      ? (currentSum - priorSum) / priorSum
+      : 0;
   }
 
   // COGS from invoices
@@ -152,10 +169,10 @@ function buildLedger(sales, payrollWeeks, invoices, cogsRate) {
     const ed = new Date(d);
     const pd = addDays(ed, LAG);
     const annualized = annualizedMap[d] || 0;
-    const priorYearGross = priorYearMap[d] || null;
+    const trailingGrowth = trailingGrowthMap[d] || 0;
 
     const baseShare = calcTieredShare(annualized, g);
-    const growthBonus = calcGrowthBonus(g, priorYearGross);
+    const growthBonus = calcGrowthBonusFromRate(g, trailingGrowth);
     const rev = baseShare + growthBonus;
 
     const act_cogs  = cogsByDay[d]  ?? null;
@@ -178,7 +195,7 @@ function buildLedger(sales, payrollWeeks, invoices, cogsRate) {
       dow: DOW[dowIdx(ed)],
       annualized,
       effectiveRate,
-      priorYearGross,
+      trailingGrowth,
     };
   });
 }
@@ -627,10 +644,11 @@ export default function Dashboard() {
   const s14  = unpaid.filter(r => dOut(r) <= 14).reduce((s,r) => s + r.net, 0);
   const s21  = unpaid.reduce((s,r) => s + r.net, 0);
 
-  // Current effective rate for sidebar
+  // Current effective rate and trailing growth for sidebar
   const recentDays = ledger.slice(-30);
   const avgEffRate = recentDays.length > 0
     ? recentDays.reduce((s,r) => s + r.effectiveRate, 0) / recentDays.length : 0;
+  const currentGrowth = ledger.length > 0 ? (ledger[ledger.length - 1].trailingGrowth || 0) : 0;
 
   return (
     <div className="min-h-screen font-sans" style={{background:'#f0f4f8'}}>
@@ -731,6 +749,7 @@ export default function Dashboard() {
               {[
                 ['Base tiers', '59/45/33/21%'],
                 ['Growth bonus', 'Tiered > 5% YoY'],
+                ['Trailing growth', (currentGrowth > 0 ? '+' : '') + pct(currentGrowth)],
                 ['Eff. rate (30d)', pct(avgEffRate)],
                 ['Payment lag', '21 days'],
                 ['COGS estimate', pct(cogsRate)],
