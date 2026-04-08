@@ -1804,27 +1804,27 @@ function RoadmapTab() {
 @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page-break { page-break-before: always; } }
 body { font-family: Garamond, 'EB Garamond', 'Times New Roman', serif; margin: 0; padding: 0; color: #1B2A4A; }
 .slide { padding: 20px 30px; position: relative; }
-.slide-title { font-size: 22px; color: #1B2A4A; margin: 0 0 6px 0; font-weight: normal; }
+.slide-title { font-size: 22pt; color: #1B2A4A; margin: 0 0 6px 0; font-weight: normal; }
 .title-line { height: 2px; background: #1B2A4A; margin-bottom: 16px; }
-.section-label { font-size: 13px; color: #1B2A4A; font-weight: bold; margin: 14px 0 6px 0; }
-.completed-label { font-size: 13px; color: #1a6b3a; font-weight: bold; margin: 18px 0 6px 0; border-top: 1px solid #D0D5DD; padding-top: 10px; }
+.section-label { font-size: 13pt; color: #1B2A4A; font-weight: bold; margin: 14px 0 6px 0; }
+.completed-label { font-size: 13pt; color: #1a6b3a; font-weight: bold; margin: 18px 0 6px 0; border-top: 1px solid #D0D5DD; padding-top: 10px; }
 .footer { position: fixed; bottom: 0; left: 0; right: 0; height: 30px; background: #1B2A4A; }
-table { width: 100%; border-collapse: collapse; font-size: 9px; }
-th { background: #1B2A4A; color: white; padding: 5px 6px; font-size: 8px; text-align: center; font-weight: bold; }
-td { padding: 4px 6px; border: 1px solid #D0D5DD; vertical-align: top; }
+table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+th { background: #1B2A4A; color: white; padding: 5px 6px; font-size: 10pt; text-align: center; font-weight: bold; }
+td { padding: 4px 6px; border: 1px solid #D0D5DD; vertical-align: top; font-size: 10pt; }
 td.center { text-align: center; }
 .p1 { color: #b5282a; font-weight: bold; } .p2 { color: #8a5c1a; font-weight: bold; } .p3 { color: #6b7a99; font-weight: bold; }
 .done { color: #1a6b3a; } .behind { color: #8a5c1a; } .late { color: #b5282a; }
 .initiative { font-weight: bold; color: #1B2A4A; }
 .initiative.completed { color: #1a6b3a; }
-.detail { font-size: 8px; color: #445566; }
-.sub { font-size: 7px; color: #6b7a99; margin-top: 2px; }
-.qtr-label { font-size: 8px; color: #6b7a99; }
-.comment-col { font-size: 8px; color: #445566; }
+.detail { color: #445566; }
+.sub { font-size: 9pt; color: #6b7a99; margin-top: 2px; }
+.qtr-label { color: #6b7a99; }
+.comment-col { color: #445566; }
 .comment-entry { margin-bottom: 4px; }
-.comment-date { font-weight: bold; color: #1B2A4A; font-size: 7px; }
-.comment-exp { color: #8a5c1a; font-size: 7px; }
-.comment-nc { color: #6b7a99; font-size: 7px; font-style: italic; }
+.comment-date { font-weight: bold; color: #1B2A4A; font-size: 9pt; }
+.comment-exp { color: #8a5c1a; font-size: 9pt; }
+.comment-nc { color: #6b7a99; font-size: 9pt; font-style: italic; }
 .empty { color: #8899aa; font-style: italic; padding: 20px; }
 </style></head><body>`;
 
