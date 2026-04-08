@@ -1626,34 +1626,49 @@ function RoadmapTab() {
 
   const [editing, setEditing] = useState({}); // { itemId-commentIdx: string }
 
-  // Edit cutoff: previous Tuesday at 5pm. Comments written this week (since last Tue 5pm) are editable until next Tue 5pm.
+  // Edit window: between previous Tuesday 5pm EST and next Tuesday 5pm EST.
+  // Comments posted within this window are editable. Outside = locked.
   function getEditCutoff() {
     const now = new Date();
+    // Work in EST/EDT: use local time (browser is in ET)
     const day = now.getDay(); // 0=Sun, 2=Tue
     const hour = now.getHours();
-    // Find the most recent Tuesday at 5pm
-    let daysBack = (day - 2 + 7) % 7;
-    if (daysBack === 0 && hour >= 17) daysBack = 0; // it's Tuesday after 5pm = this cutoff just passed
-    else if (daysBack === 0) daysBack = 7; // it's Tuesday before 5pm = cutoff was last Tuesday
-    const cutoff = new Date(now);
-    cutoff.setDate(cutoff.getDate() - daysBack);
-    cutoff.setHours(17, 0, 0, 0);
+
+    // How many days since the most recent Tuesday 5pm?
+    let daysBack;
+    if (day === 2 && hour >= 17) {
+      // It's Tuesday after 5pm — cutoff is TODAY at 5pm
+      daysBack = 0;
+    } else if (day === 2) {
+      // It's Tuesday before 5pm — cutoff is LAST Tuesday at 5pm
+      daysBack = 7;
+    } else {
+      // Other days — find days back to last Tuesday
+      daysBack = (day - 2 + 7) % 7;
+      if (daysBack === 0) daysBack = 7;
+    }
+
+    const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysBack, 17, 0, 0, 0);
     return cutoff;
   }
 
   function isEditable(commentTimestamp) {
-    return new Date(commentTimestamp) >= getEditCutoff();
+    // Compare using local time since both cutoff and timestamp are evaluated locally
+    const posted = new Date(commentTimestamp);
+    const cutoff = getEditCutoff();
+    return posted >= cutoff;
   }
 
   function addComment(itemId) {
+    if (!revisedDates[itemId]) return; // require expected date
     const isNoChange = noChange[itemId];
     const text = isNoChange ? 'No change from last update' : (drafts[itemId] || '').trim();
     if (!text) return;
     const entry = {
       text,
-      timestamp: new Date().toISOString(),
+      timestamp: Date.now(),
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      expectedDate: revisedDates[itemId] || null,
+      expectedDate: revisedDates[itemId],
       noChange: isNoChange || false,
     };
     setComments(prev => ({ ...prev, [itemId]: [...(prev[itemId] || []), entry] }));
@@ -1846,12 +1861,17 @@ function RoadmapTab() {
                                     </div>
                                   </div>
                                   <button onClick={() => addComment(item.id)}
-                                    disabled={!isNoChange && !draft.trim()}
+                                    disabled={!revised || (!isNoChange && !draft.trim())}
                                     className="px-3 py-2 rounded text-xs font-semibold text-white disabled:opacity-40 flex-shrink-0"
                                     style={{background: NAVY}}>
                                     Post
                                   </button>
                                 </div>
+                                {!revised && (
+                                  <div className="text-xs mt-1" style={{color:'#b5282a'}}>
+                                    Set an expected completion date before posting.
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
