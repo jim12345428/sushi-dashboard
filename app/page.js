@@ -313,9 +313,15 @@ function ScenarioModeler({ storeSales }) {
       const takeHome = totalShare - cogs - payroll;
       const dailyPayout = days > 0 ? takeHome / 365 : 0;
 
+      // Fjord's side
+      const fjordNet = grownAnnual - totalShare;
+      const fjordPct = grownAnnual > 0 ? fjordNet / grownAnnual : 0;
+      const fjordDaily = days > 0 ? fjordNet / 365 : 0;
+
       return {
         store, annualized, grownAnnual, tieredTotal, accelBonus, totalShare,
         effRate, cogs, payroll, takeHome, dailyPayout,
+        fjordNet, fjordPct, fjordDaily,
       };
     });
   }, [storeSales, cogsRate, staffHrs, staffRate, growthPct]);
@@ -381,22 +387,38 @@ function ScenarioModeler({ storeSales }) {
         </div>
       </div>
 
+      {/* Summary Cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {[
+          ['Total Revenue', fmt(results.reduce((s,r) => s+r.grownAnnual, 0)), '#445566', '#f7f9fc', '#dde4ed'],
+          ['Operator Payouts', fmt(results.reduce((s,r) => s+r.totalShare, 0)), '#1a6b8a', '#edf6fb', '#b3d9eb'],
+          ['Total Operator Take-Home', fmt(results.reduce((s,r) => s+r.takeHome, 0)), '#1a6b3a', '#edfaf2', '#9dd4b5'],
+          ['Fjord Net Revenue', fmt(results.reduce((s,r) => s+r.fjordNet, 0)), GOLD_ACCENT, '#fdf8ec', '#e8d38a'],
+        ].map(([label,val,color,bg,border]) => (
+          <div key={label} className="rounded-xl p-4" style={{background:bg, border:`1px solid ${border}`}}>
+            <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>{label}</div>
+            <div className="text-2xl font-bold" style={{color}}>{val}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Results Table */}
-      <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
+      <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#f7f9fc', borderBottom:'1px solid #dde4ed'}}>
+          Operator Economics
+        </div>
         <table className="w-full text-xs">
           <thead>
             <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
               <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Annualized Rev</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>w/ Growth</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Revenue</th>
               <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Base Share</th>
               <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Growth Bonus</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Total Share</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Eff. Rate</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb'}}>Total Payout</th>
               <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#8a5c1a'}}>COGS</th>
               <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#3a4a8a'}}>Payroll</th>
               <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edfaf2'}}>Take-Home</th>
-              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edfaf2'}}>Daily Payout</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b3a', background:'#edfaf2'}}>Daily</th>
             </tr>
           </thead>
           <tbody>
@@ -405,14 +427,12 @@ function ScenarioModeler({ storeSales }) {
               return (
                 <tr key={r.store} style={{borderBottom:'1px solid #eef1f6'}} className="hover:bg-blue-50/30">
                   <td className="px-4 py-3 font-semibold" style={{color: NAVY}}>{STORE_LABELS[r.store]}</td>
-                  <td className="px-4 py-3 text-right" style={{color:'#445566'}}>{fmt(r.annualized)}</td>
-                  <td className="px-4 py-3 text-right font-medium" style={{color:'#445566'}}>{fmt(r.grownAnnual)}</td>
+                  <td className="px-4 py-3 text-right" style={{color:'#445566'}}>{fmt(r.grownAnnual)}</td>
                   <td className="px-4 py-3 text-right" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(r.tieredTotal)}</td>
                   <td className="px-4 py-3 text-right" style={{color: r.accelBonus > 0 ? '#1a6b3a' : '#8899aa', background:'rgba(237,246,251,0.4)'}}>
                     {r.accelBonus > 0 ? '+' + fmt(r.accelBonus) : '-'}
                   </td>
                   <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(r.totalShare)}</td>
-                  <td className="px-4 py-3 text-right" style={{color:'#6b7a99'}}>{pct(r.effRate)}</td>
                   <td className="px-4 py-3 text-right" style={{color:'#8a5c1a'}}>{fmt(r.cogs)}</td>
                   <td className="px-4 py-3 text-right" style={{color:'#3a4a8a'}}>{fmt(r.payroll)}</td>
                   <td className="px-4 py-3 text-right font-bold text-sm" style={{color: thColor, background:'rgba(237,250,242,0.4)'}}>{fmt(r.takeHome)}</td>
@@ -424,16 +444,60 @@ function ScenarioModeler({ storeSales }) {
           <tfoot>
             <tr style={{background:'#f0f4f8', borderTop:`2px solid ${NAVY}`}}>
               <td className="px-4 py-3 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>All Stores</td>
-              <td className="px-4 py-3 text-right font-bold" style={{color:'#445566'}}>{fmt(results.reduce((s,r) => s+r.annualized, 0))}</td>
               <td className="px-4 py-3 text-right font-bold" style={{color:'#445566'}}>{fmt(results.reduce((s,r) => s+r.grownAnnual, 0))}</td>
               <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(results.reduce((s,r) => s+r.tieredTotal, 0))}</td>
               <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(237,246,251,0.6)'}}>{fmt(results.reduce((s,r) => s+r.accelBonus, 0))}</td>
               <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(results.reduce((s,r) => s+r.totalShare, 0))}</td>
-              <td className="px-4 py-3 text-right" style={{color:'#6b7a99'}}>-</td>
               <td className="px-4 py-3 text-right font-bold" style={{color:'#8a5c1a'}}>{fmt(results.reduce((s,r) => s+r.cogs, 0))}</td>
               <td className="px-4 py-3 text-right font-bold" style={{color:'#3a4a8a'}}>{fmt(results.reduce((s,r) => s+r.payroll, 0))}</td>
               <td className="px-4 py-3 text-right font-bold text-sm" style={{color:'#1a6b3a', background:'rgba(237,250,242,0.6)'}}>{fmt(results.reduce((s,r) => s+r.takeHome, 0))}</td>
               <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(237,250,242,0.6)'}}>{fmt(results.reduce((s,r) => s+r.dailyPayout, 0))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Fjord Economics */}
+      <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderBottom:'1px solid #e8d38a'}}>
+          Fjord Net Revenue
+        </div>
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
+              <th className="text-left px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Gross Revenue</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a'}}>Operator Payout</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Operator Eff. %</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Fjord Net</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#fdf8ec'}}>Fjord %</th>
+              <th className="text-right px-4 py-3 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec'}}>Fjord Daily</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map(r => (
+              <tr key={r.store} style={{borderBottom:'1px solid #eef1f6'}} className="hover:bg-blue-50/30">
+                <td className="px-4 py-3 font-semibold" style={{color: NAVY}}>{STORE_LABELS[r.store]}</td>
+                <td className="px-4 py-3 text-right" style={{color:'#445566'}}>{fmt(r.grownAnnual)}</td>
+                <td className="px-4 py-3 text-right" style={{color:'#1a6b8a'}}>{fmt(r.totalShare)}</td>
+                <td className="px-4 py-3 text-right" style={{color:'#6b7a99'}}>{pct(r.effRate)}</td>
+                <td className="px-4 py-3 text-right font-bold text-sm" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(r.fjordNet)}</td>
+                <td className="px-4 py-3 text-right" style={{color:'#6b7a99', background:'rgba(253,248,236,0.4)'}}>{pct(r.fjordPct)}</td>
+                <td className="px-4 py-3 text-right font-medium" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(r.fjordDaily)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{background:'#fdf8ec', borderTop:`2px solid ${GOLD_ACCENT}`}}>
+              <td className="px-4 py-3 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>All Stores</td>
+              <td className="px-4 py-3 text-right font-bold" style={{color:'#445566'}}>{fmt(results.reduce((s,r) => s+r.grownAnnual, 0))}</td>
+              <td className="px-4 py-3 text-right font-bold" style={{color:'#1a6b8a'}}>{fmt(results.reduce((s,r) => s+r.totalShare, 0))}</td>
+              <td className="px-4 py-3 text-right" style={{color:'#6b7a99'}}>-</td>
+              <td className="px-4 py-3 text-right font-bold text-sm" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(results.reduce((s,r) => s+r.fjordNet, 0))}</td>
+              <td className="px-4 py-3 text-right" style={{color:'#6b7a99', background:'rgba(253,248,236,0.6)'}}>
+                {pct(results.reduce((s,r) => s+r.grownAnnual, 0) > 0 ? results.reduce((s,r) => s+r.fjordNet, 0) / results.reduce((s,r) => s+r.grownAnnual, 0) : 0)}
+              </td>
+              <td className="px-4 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(results.reduce((s,r) => s+r.fjordDaily, 0))}</td>
             </tr>
           </tfoot>
         </table>
@@ -481,7 +545,7 @@ function ScenarioModeler({ storeSales }) {
 
 /* ── MAIN DASHBOARD ── */
 export default function Dashboard() {
-  const [tab, setTab]             = useState('upcoming');
+  const [tab, setTab]             = useState('overview');
   const [store, setStore]         = useState('cos cob');
   const [allSales, setAllSales]   = useState({});
   const [allPayroll, setAllPayroll] = useState({});
@@ -601,7 +665,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['upcoming','Upcoming Payments'],['ledger','Daily Ledger'],['history','Payment History'],['invoices','Invoices'],['modeler','Scenario Modeler']].map(([id,label]) => (
+        {[['overview','Overview'],['upcoming','Upcoming Payments'],['ledger','Daily Ledger'],['history','Payment History'],['invoices','Invoices'],['modeler','Scenario Modeler']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -613,7 +677,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {tab !== 'modeler' && (
+        {tab !== 'modeler' && tab !== 'overview' && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -665,6 +729,169 @@ export default function Dashboard() {
 
         {/* MAIN */}
         <main className={`flex-1 p-6 overflow-y-auto ${tab === 'modeler' ? '' : ''}`}>
+
+          {/* OVERVIEW */}
+          {tab === 'overview' && (
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold" style={{color: NAVY}}>Sushi Concession Owner-Operator Program</h1>
+                <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Internal reference &mdash; compensation model, key terms, and program goals</p>
+              </div>
+
+              {/* What We're Building */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>What We Are Building</h2>
+                <p className="text-sm leading-relaxed mb-4" style={{color:'#445566'}}>
+                  A platform where sushi concession operators run their own businesses within Fjord Fish Market locations.
+                  Each operator sets up their own LLC and receives a daily revenue share from their store&apos;s sales. From that payout,
+                  they cover their own COGS (ingredients, supplies) and payroll (any additional staff they hire). Fjord retains the
+                  remaining revenue after the operator&apos;s share is paid out.
+                </p>
+                <p className="text-sm leading-relaxed" style={{color:'#445566'}}>
+                  The goal is to create true owner-operators who are invested in growing their store&apos;s business, working
+                  50+ hours per week in-store, and thinking like entrepreneurs &mdash; not employees collecting a paycheck.
+                </p>
+              </div>
+
+              {/* Goals */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>Program Goals</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    ['Livable Floor', 'Operators earn at least ~$70k/year at even the lowest-volume stores, making this a viable full-time career.'],
+                    ['Performance Ceiling ~$150k', 'Top-performing operators (Darien-level volume) can earn ~$150k, with continued upside beyond that.'],
+                    ['No Hard Cap', 'The growth accelerator ensures operators are always incentivized to push revenue higher, even at the top tier.'],
+                    ['Anti-Absentee Design', 'The tiered structure makes it economically unviable to simply hire cheap labor and step away. The math only works when the operator is in the store.'],
+                  ].map(([title, desc]) => (
+                    <div key={title} className="rounded-lg p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
+                      <div className="text-sm font-bold mb-1" style={{color: NAVY}}>{title}</div>
+                      <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* How It Works */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>How the Revenue Share Works</h2>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                    <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>52%</div>
+                    <div className="text-xs mt-1" style={{color:'#6b7a99'}}>First $400k revenue</div>
+                  </div>
+                  <div className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                    <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>40%</div>
+                    <div className="text-xs mt-1" style={{color:'#6b7a99'}}>$400k &ndash; $700k revenue</div>
+                  </div>
+                  <div className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                    <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>25%</div>
+                    <div className="text-xs mt-1" style={{color:'#6b7a99'}}>Above $700k revenue</div>
+                  </div>
+                </div>
+                <div className="rounded-lg p-4 mb-4" style={{background:'#edfaf2', border:'1px solid #9dd4b5'}}>
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl font-bold" style={{color:'#1a6b3a'}}>+15%</div>
+                    <div>
+                      <div className="text-sm font-bold" style={{color:'#1a6b3a'}}>YoY Growth Accelerator</div>
+                      <div className="text-xs" style={{color:'#6b7a99'}}>
+                        On all incremental revenue above 5% year-over-year growth. Rewards operators who actively grow the business.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>
+                  <strong style={{color: NAVY}}>Example:</strong> A store doing $700k/year pays the operator: ($400k &times; 52%) + ($300k &times; 40%) = $208k + $120k = $328k.
+                  If that store grew 15% YoY, the operator also earns 15% on the incremental revenue above the 5% threshold:
+                  $700k &times; 10% &times; 15% = $10,500 growth bonus. Total payout: $338,500.
+                </div>
+              </div>
+
+              {/* Money Flow */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>Daily Money Flow</h2>
+                <div className="flex items-center gap-2 flex-wrap text-sm">
+                  {[
+                    ['Customer pays', '#445566', '#f7f9fc'],
+                    ['POS captures sale', '#445566', '#f7f9fc'],
+                    ['CC settles next day', '#445566', '#f7f9fc'],
+                    ['21-day float', GOLD_ACCENT, '#fdf8ec'],
+                    ['Daily ACH to operator LLC', '#1a6b3a', '#edfaf2'],
+                  ].map(([step, color, bg], i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      {i > 0 && <span style={{color:'#ccd4e0'}}>&rarr;</span>}
+                      <span className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{color, background: bg, border:'1px solid #dde4ed'}}>
+                        {step}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs mt-3" style={{color:'#8899aa'}}>
+                  Payout is initiated via Modern Treasury on day 20, arrives in operator&apos;s LLC bank account on day 21.
+                </div>
+              </div>
+
+              {/* Key Terms */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-4" style={{color: NAVY}}>Key Terms</h2>
+                <div className="space-y-3">
+                  {[
+                    ['Owner-Operator', 'An independent business owner (LLC) who runs a sushi concession inside a Fjord location. Expected to work 50+ hours/week in-store.'],
+                    ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a tiered structure (52% / 40% / 25%) applied to annualized revenue.'],
+                    ['Growth Accelerator', 'A 15% bonus on incremental revenue above 5% year-over-year growth, paid on top of the base revenue share.'],
+                    ['COGS (Cost of Goods Sold)', 'Ingredients, packaging, and supplies. Estimated at 20% of revenue. Paid by the operator from their revenue share.'],
+                    ['Payroll', 'Wages for any additional staff the operator hires, plus ~25% burden (FICA, SUTA/FUTA, workers comp). Paid by the operator from their share.'],
+                    ['21-Day Float', 'The lag between when a sale occurs and when the operator receives their payout. Fjord holds funds for 21 days after credit card settlement.'],
+                    ['Take-Home', 'What the operator keeps after paying COGS and payroll from their revenue share. This is their personal income.'],
+                    ['Fjord Net', 'Revenue retained by Fjord after paying out the operator\'s share. Fjord does NOT pay COGS or payroll — those are the operator\'s responsibility.'],
+                    ['Effective Rate', 'The blended percentage the operator actually receives, accounting for all tiers. Decreases as revenue grows due to the tiered structure.'],
+                    ['Modern Treasury', 'Payment operations platform used to automate daily ACH payouts to operator bank accounts.'],
+                    ['Store Hours', 'Mon-Sat 10am-7pm, Sun 10am-6pm (63 hours/week). Operator covers 50+ hours; additional staff covers the remaining hours.'],
+                  ].map(([term, def]) => (
+                    <div key={term} className="flex gap-4 py-2" style={{borderBottom:'1px solid #eef1f6'}}>
+                      <div className="w-48 flex-shrink-0 text-sm font-semibold" style={{color: NAVY}}>{term}</div>
+                      <div className="text-sm" style={{color:'#6b7a99'}}>{def}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Locations */}
+              <div className="rounded-xl p-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>Locations</h2>
+                <div className="grid grid-cols-3 gap-3">
+                  {STORES.map(s => {
+                    const sales = allSales[s] || [];
+                    const totalRev = sales.reduce((sum, r) => sum + r.gross, 0);
+                    const days = sales.length;
+                    const annualized = days > 0 ? (totalRev / days) * 365 : 0;
+                    const dailyAvg = days > 0 ? totalRev / days : 0;
+                    const needsStaff = annualized > 350000;
+                    return (
+                      <div key={s} className="rounded-lg p-4" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
+                        <div className="text-sm font-bold mb-2" style={{color: NAVY}}>{STORE_LABELS[s]}</div>
+                        <div className="space-y-1 text-xs" style={{color:'#6b7a99'}}>
+                          <div className="flex justify-between">
+                            <span>Annualized</span>
+                            <strong style={{color:'#445566'}}>{fmt(annualized)}</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Daily Avg</span>
+                            <strong style={{color:'#445566'}}>{fmt(dailyAvg)}</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Staffing</span>
+                            <strong style={{color: needsStaff ? '#3a4a8a' : '#1a6b3a'}}>
+                              {needsStaff ? 'Operator + staff' : 'Solo operator'}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* UPCOMING */}
           {tab === 'upcoming' && (
