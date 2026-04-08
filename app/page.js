@@ -576,6 +576,272 @@ function ScenarioModeler({ storeSales }) {
   );
 }
 
+/* ── INCOME CALCULATOR ── */
+function IncomeCalculator() {
+  const [storeVolume, setStoreVolume] = useState(500000);
+  const [cogsRate, setCogsRate] = useState(20);
+  const [staffHrs, setStaffHrs] = useState(15);
+  const [staffRate, setStaffRate] = useState(25);
+  const [myGrowth, setMyGrowth] = useState(10);
+
+  const BURDEN = 1.25;
+
+  const results = useMemo(() => {
+    // Base share
+    let tieredTotal = 0, prev = 0;
+    for (const t of BASE_TIERS) {
+      const tierRev = Math.min(storeVolume, t.upTo) - prev;
+      if (tierRev <= 0) break;
+      tieredTotal += tierRev * t.pct;
+      prev = t.upTo;
+    }
+
+    // Growth accelerator
+    let accelBonus = 0;
+    const gRate = myGrowth / 100;
+    if (gRate > GROWTH_ACCEL_TIERS[0].above) {
+      for (const t of GROWTH_ACCEL_TIERS) {
+        if (gRate <= t.above) continue;
+        const applicableGrowth = Math.min(gRate, t.upTo) - t.above;
+        accelBonus += storeVolume * applicableGrowth * t.pct;
+      }
+    }
+
+    const totalPayout = tieredTotal + accelBonus;
+    const effRate = storeVolume > 0 ? totalPayout / storeVolume : 0;
+    const cogs = storeVolume * (cogsRate / 100);
+    const payroll = staffHrs * staffRate * 52 * BURDEN;
+    const takeHome = totalPayout - cogs - payroll;
+    const monthly = takeHome / 12;
+    const daily = takeHome / 365;
+    const weekly = takeHome / 52;
+
+    // Breakdown by tier
+    const tierBreakdown = [];
+    let p = 0;
+    for (const t of BASE_TIERS) {
+      const tierRev = Math.min(storeVolume, t.upTo) - p;
+      if (tierRev <= 0) break;
+      tierBreakdown.push({ range: p === 0 ? 'First $' + (t.upTo/1000) + 'k' : (t.upTo === Infinity ? '$' + (p/1000) + 'k+' : '$' + (p/1000) + 'k-$' + (t.upTo/1000) + 'k'), rev: tierRev, pct: t.pct, share: tierRev * t.pct });
+      p = t.upTo;
+    }
+
+    return { tieredTotal, accelBonus, totalPayout, effRate, cogs, payroll, takeHome, monthly, daily, weekly, tierBreakdown };
+  }, [storeVolume, cogsRate, staffHrs, staffRate, myGrowth]);
+
+  const thColor = results.takeHome >= 70000 ? '#1a6b3a' : results.takeHome >= 50000 ? '#8a5c1a' : '#b5282a';
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold" style={{color: NAVY}}>Income Calculator</h1>
+        <p className="text-sm mt-2" style={{color:'#6b7a99'}}>See what you could earn as a Fjord sushi concession owner-operator. Adjust the inputs to match your situation.</p>
+      </div>
+
+      {/* Big Income Display */}
+      <div className="rounded-xl p-8 mb-6 text-center" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+        <div className="text-xs uppercase tracking-widest mb-2" style={{color:'rgba(255,255,255,0.5)'}}>Your Estimated Annual Take-Home</div>
+        <div className="text-5xl font-bold mb-3" style={{color: results.takeHome >= 70000 ? '#4ade80' : results.takeHome >= 50000 ? GOLD_ACCENT : '#f87171'}}>
+          {fmt(results.takeHome)}
+        </div>
+        <div className="flex justify-center gap-8 text-sm" style={{color:'rgba(255,255,255,0.6)'}}>
+          <span>{fmt(results.monthly)}/month</span>
+          <span>{fmt(results.weekly)}/week</span>
+          <span>{fmt(results.daily)}/day</span>
+        </div>
+      </div>
+
+      {/* Input Controls */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="rounded-xl p-5" style={{background:'white', border:'1px solid #dde4ed'}}>
+          <label className="text-xs font-semibold uppercase tracking-wide block mb-3" style={{color:'#6b7a99'}}>
+            Your Store&apos;s Annual Revenue
+          </label>
+          <div className="flex items-center gap-3">
+            <input type="range" min="150000" max="1000000" step="25000" value={storeVolume}
+              onChange={e => setStoreVolume(Number(e.target.value))}
+              className="flex-1" />
+            <span className="text-xl font-bold w-24 text-right" style={{color: NAVY}}>{fmt(storeVolume)}</span>
+          </div>
+          <div className="text-xs mt-2" style={{color:'#8899aa'}}>
+            Our stores range from ~$220k to ~$770k in annual revenue
+          </div>
+        </div>
+        <div className="rounded-xl p-5" style={{background:'white', border:'1px solid #dde4ed'}}>
+          <label className="text-xs font-semibold uppercase tracking-wide block mb-3" style={{color:'#6b7a99'}}>
+            Your Year-Over-Year Growth
+          </label>
+          <div className="flex items-center gap-3">
+            <input type="range" min="0" max="35" step="5" value={myGrowth}
+              onChange={e => setMyGrowth(Number(e.target.value))}
+              className="flex-1" />
+            <span className="text-xl font-bold w-16 text-right" style={{color: myGrowth > 5 ? '#1a6b3a' : NAVY}}>
+              {myGrowth > 0 ? '+' : ''}{myGrowth}%
+            </span>
+          </div>
+          <div className="text-xs mt-2" style={{color:'#8899aa'}}>
+            Growth above 5% unlocks bonus payouts
+          </div>
+        </div>
+        <div className="rounded-xl p-5" style={{background:'white', border:'1px solid #dde4ed'}}>
+          <label className="text-xs font-semibold uppercase tracking-wide block mb-3" style={{color:'#6b7a99'}}>
+            Additional Staff Hours / Week
+          </label>
+          <div className="flex items-center gap-3">
+            <input type="range" min="0" max="40" step="5" value={staffHrs}
+              onChange={e => setStaffHrs(Number(e.target.value))}
+              className="flex-1" />
+            <span className="text-xl font-bold w-16 text-right" style={{color: NAVY}}>{staffHrs} hrs</span>
+          </div>
+          <div className="text-xs mt-2" style={{color:'#8899aa'}}>
+            Staff you hire at ${staffRate}/hr + benefits. You cover 50+ hrs/week yourself.
+          </div>
+        </div>
+        <div className="rounded-xl p-5" style={{background:'white', border:'1px solid #dde4ed'}}>
+          <label className="text-xs font-semibold uppercase tracking-wide block mb-3" style={{color:'#6b7a99'}}>
+            Food Cost (COGS) %
+          </label>
+          <div className="flex items-center gap-3">
+            <input type="range" min="15" max="35" step="1" value={cogsRate}
+              onChange={e => setCogsRate(Number(e.target.value))}
+              className="flex-1" />
+            <span className="text-xl font-bold w-16 text-right" style={{color: NAVY}}>{cogsRate}%</span>
+          </div>
+          <div className="text-xs mt-2" style={{color:'#8899aa'}}>
+            Typical sushi food cost is 18&ndash;22% of revenue
+          </div>
+        </div>
+      </div>
+
+      {/* How the Math Works */}
+      <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <div className="px-5 py-4" style={{background:'#f7f9fc', borderBottom:'1px solid #dde4ed'}}>
+          <div className="text-sm font-bold" style={{color: NAVY}}>How Your Income Breaks Down</div>
+          <div className="text-xs" style={{color:'#6b7a99'}}>Based on {fmt(storeVolume)} annual store revenue</div>
+        </div>
+        <div className="p-5">
+          {/* Revenue Share Waterfall */}
+          <div className="mb-5">
+            <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>Your Revenue Share</div>
+            <div className="space-y-2">
+              {results.tierBreakdown.map((t, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-32 text-xs" style={{color:'#8899aa'}}>{t.range}</div>
+                  <div className="flex-1 h-6 rounded-full overflow-hidden" style={{background:'#eef1f6'}}>
+                    <div className="h-full rounded-full" style={{
+                      width: Math.max(2, (t.share / results.totalPayout) * 100) + '%',
+                      background: '#1a6b8a',
+                    }} />
+                  </div>
+                  <div className="w-16 text-xs text-right" style={{color:'#8899aa'}}>{(t.pct * 100)}%</div>
+                  <div className="w-20 text-xs text-right font-semibold" style={{color:'#1a6b8a'}}>{fmt(t.share)}</div>
+                </div>
+              ))}
+              {results.accelBonus > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="w-32 text-xs" style={{color:'#1a6b3a'}}>Growth bonus</div>
+                  <div className="flex-1 h-6 rounded-full overflow-hidden" style={{background:'#eef1f6'}}>
+                    <div className="h-full rounded-full" style={{
+                      width: Math.max(2, (results.accelBonus / results.totalPayout) * 100) + '%',
+                      background: '#1a6b3a',
+                    }} />
+                  </div>
+                  <div className="w-16 text-xs text-right" style={{color:'#1a6b3a'}}>+{myGrowth}% YoY</div>
+                  <div className="w-20 text-xs text-right font-semibold" style={{color:'#1a6b3a'}}>+{fmt(results.accelBonus)}</div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-between mt-3 pt-3" style={{borderTop:'2px solid #dde4ed'}}>
+              <span className="text-sm font-bold" style={{color:'#1a6b8a'}}>Total payout from Fjord</span>
+              <span className="text-sm font-bold" style={{color:'#1a6b8a'}}>{fmt(results.totalPayout)} ({pct(results.effRate)} effective)</span>
+            </div>
+          </div>
+
+          {/* Expenses */}
+          <div className="mb-5">
+            <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>Your Expenses (paid from your share)</div>
+            <div className="space-y-2">
+              <div className="flex justify-between py-2" style={{borderBottom:'1px solid #eef1f6'}}>
+                <span className="text-sm" style={{color:'#8a5c1a'}}>COGS (ingredients &amp; supplies) &mdash; {cogsRate}%</span>
+                <span className="text-sm font-semibold" style={{color:'#8a5c1a'}}>&minus;{fmt(results.cogs)}</span>
+              </div>
+              <div className="flex justify-between py-2" style={{borderBottom:'1px solid #eef1f6'}}>
+                <span className="text-sm" style={{color:'#3a4a8a'}}>
+                  Staff payroll &mdash; {staffHrs} hrs/wk @ ${staffRate}/hr + 25% burden
+                </span>
+                <span className="text-sm font-semibold" style={{color:'#3a4a8a'}}>&minus;{fmt(results.payroll)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Line */}
+          <div className="rounded-xl p-5" style={{background: results.takeHome >= 70000 ? '#edfaf2' : results.takeHome >= 50000 ? '#fdf8ec' : '#fef2f2', border:`2px solid ${thColor}`}}>
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="text-sm font-bold" style={{color: thColor}}>Your Annual Take-Home Income</div>
+                <div className="text-xs mt-1" style={{color:'#6b7a99'}}>Revenue share &minus; COGS &minus; payroll = what you keep</div>
+              </div>
+              <div className="text-3xl font-bold" style={{color: thColor}}>{fmt(results.takeHome)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Scenarios */}
+      <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="text-sm font-bold mb-4" style={{color: NAVY}}>Quick Scenarios &mdash; What Could You Earn?</div>
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: 'Getting Started', rev: 250000, growth: 0, staff: 9, desc: 'Lower-volume store, solo + 1 day coverage' },
+            { label: 'Solid Performer', rev: 500000, growth: 10, staff: 15, desc: 'Mid-volume store, steady growth' },
+            { label: 'Top Operator', rev: 750000, growth: 20, staff: 30, desc: 'High-volume store, strong growth' },
+          ].map(sc => {
+            let t = 0, p = 0;
+            for (const tier of BASE_TIERS) {
+              const tierRev = Math.min(sc.rev, tier.upTo) - p;
+              if (tierRev <= 0) break;
+              t += tierRev * tier.pct;
+              p = tier.upTo;
+            }
+            let bonus = 0;
+            const gRate = sc.growth / 100;
+            if (gRate > GROWTH_ACCEL_TIERS[0].above) {
+              for (const tier of GROWTH_ACCEL_TIERS) {
+                if (gRate <= tier.above) continue;
+                bonus += sc.rev * (Math.min(gRate, tier.upTo) - tier.above) * tier.pct;
+              }
+            }
+            const income = t + bonus - sc.rev * 0.20 - sc.staff * 25 * 52 * 1.25;
+            const incColor = income >= 70000 ? '#1a6b3a' : income >= 50000 ? '#8a5c1a' : '#b5282a';
+            return (
+              <div key={sc.label} className="rounded-lg p-5 text-center cursor-pointer hover:shadow-md transition-shadow"
+                style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}
+                onClick={() => { setStoreVolume(sc.rev); setMyGrowth(sc.growth); setStaffHrs(sc.staff); }}>
+                <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{color:'#6b7a99'}}>{sc.label}</div>
+                <div className="text-2xl font-bold mb-1" style={{color: incColor}}>{fmt(income)}</div>
+                <div className="text-xs" style={{color:'#8899aa'}}>{fmt(sc.rev)} revenue &middot; +{sc.growth}% growth</div>
+                <div className="text-xs mt-1" style={{color:'#8899aa'}}>{sc.desc}</div>
+                <div className="text-xs mt-2 font-medium" style={{color:'#1a6b8a'}}>Click to load this scenario</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Fine Print */}
+      <div className="rounded-xl p-5" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
+        <div className="text-xs leading-relaxed" style={{color:'#8899aa'}}>
+          <strong style={{color:'#6b7a99'}}>Important:</strong> These figures are estimates based on current store performance data and the assumptions you&apos;ve entered.
+          Actual income will vary based on your store&apos;s performance, your cost management, local market conditions, and seasonal fluctuations.
+          Revenue share percentages are based on annualized store revenue. Growth bonuses are calculated on a trailing 90-day basis
+          and require sustained year-over-year improvement. You are responsible for all business expenses including COGS, payroll,
+          payroll taxes, and any other costs associated with running your LLC.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── MAIN DASHBOARD ── */
 export default function Dashboard() {
   const [tab, setTab]             = useState('overview');
@@ -699,7 +965,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['upcoming','Upcoming Payments'],['ledger','Daily Ledger'],['history','Payment History'],['invoices','Invoices'],['modeler','Scenario Modeler']].map(([id,label]) => (
+        {[['overview','Overview'],['upcoming','Upcoming Payments'],['ledger','Daily Ledger'],['history','Payment History'],['invoices','Invoices'],['modeler','Scenario Modeler'],['recruit','Job Opportunity'],['income','Income Calculator']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -711,7 +977,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {tab !== 'modeler' && tab !== 'overview' && (
+        {!['modeler','overview','recruit','income'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -1147,6 +1413,158 @@ export default function Dashboard() {
           {/* SCENARIO MODELER */}
           {tab === 'modeler' && (
             <ScenarioModeler storeSales={allSales} />
+          )}
+
+          {/* JOB OPPORTUNITY */}
+          {tab === 'recruit' && (
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-6">
+                <div className="text-xs font-semibold uppercase tracking-widest mb-2" style={{color: GOLD_ACCENT}}>Now Recruiting</div>
+                <h1 className="text-3xl font-bold" style={{color: NAVY}}>Sushi Concession Owner-Operator</h1>
+                <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Fjord Fish Market &middot; Multiple Locations in CT &amp; NY</p>
+              </div>
+
+              {/* Hero Card */}
+              <div className="rounded-xl p-6 mb-6" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+                <div className="grid grid-cols-3 gap-6 text-center">
+                  <div>
+                    <div className="text-3xl font-bold text-white">$70k&ndash;$150k+</div>
+                    <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>Annual earning potential</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-bold" style={{color: GOLD_ACCENT}}>Be Your Own Boss</div>
+                    <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>Run your own LLC</div>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-bold text-white">Daily Pay</div>
+                    <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>Revenue share deposited daily</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* The Opportunity */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>The Opportunity</h2>
+                <p className="text-sm leading-relaxed mb-4" style={{color:'#445566'}}>
+                  Fjord Fish Market is looking for entrepreneurial sushi chefs to run their own sushi concession inside
+                  our premium retail locations. This is not a job &mdash; it&apos;s your own business. You&apos;ll operate as an
+                  independent owner through your own LLC, receiving a daily revenue share from your store&apos;s sales.
+                </p>
+                <p className="text-sm leading-relaxed" style={{color:'#445566'}}>
+                  We provide the location, the foot traffic, the brand, and the platform. You bring the craft,
+                  the hustle, and the ownership mentality. The more you grow the business, the more you earn.
+                </p>
+              </div>
+
+              {/* What You Get */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+                <h2 className="text-lg font-bold mb-4" style={{color: NAVY}}>What You Get</h2>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    ['Daily Revenue Share', 'You receive a percentage of your store\'s daily gross sales, deposited directly into your business bank account every day.'],
+                    ['Established Locations', 'Step into a store with existing customer traffic, an established brand, and proven demand. No building from scratch.'],
+                    ['Growth Bonuses', 'The harder you grow your store, the higher your bonus percentage. Our tiered accelerator rewards aggressive growth disproportionately.'],
+                    ['Full Autonomy', 'You run your business your way. Hire your own staff, manage your own schedule, control your own inventory and menu.'],
+                    ['Technology Platform', 'Real-time dashboard showing your revenue, payouts, expenses, and upcoming payments. Full visibility into your business.'],
+                    ['No Rent or Overhead', 'No lease, no build-out costs, no utility bills. You focus on making great sushi and growing your customer base.'],
+                  ].map(([title, desc]) => (
+                    <div key={title} className="rounded-lg p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
+                      <div className="text-sm font-bold mb-1" style={{color: NAVY}}>{title}</div>
+                      <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* What We're Looking For */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-4" style={{color: NAVY}}>What We&apos;re Looking For</h2>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+                  {[
+                    ['Experienced sushi chef', 'Minimum 3 years preparing sushi in a professional setting'],
+                    ['Entrepreneurial mindset', 'You think like a business owner, not an employee'],
+                    ['Hands-on operator', 'You\'ll work 50+ hours per week in your store, leading from the front'],
+                    ['Business-ready', 'Willing to set up your own LLC, handle payroll, and manage expenses'],
+                    ['Growth-oriented', 'You see a revenue target as a starting point, not a ceiling'],
+                    ['Customer-focused', 'Quality and consistency drive everything you do'],
+                  ].map(([title, desc]) => (
+                    <div key={title} className="py-2" style={{borderBottom:'1px solid #eef1f6'}}>
+                      <div className="text-sm font-semibold" style={{color: NAVY}}>{title}</div>
+                      <div className="text-xs" style={{color:'#6b7a99'}}>{desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* How It Works */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-4" style={{color: NAVY}}>How the Economics Work</h2>
+                <div className="space-y-4">
+                  <div className="flex gap-4 items-start">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white" style={{background: NAVY}}>1</div>
+                    <div>
+                      <div className="text-sm font-bold" style={{color: NAVY}}>Customers buy sushi at your store</div>
+                      <div className="text-xs" style={{color:'#6b7a99'}}>All sales are captured through the POS system. You can see your numbers in real-time.</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 items-start">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white" style={{background: NAVY}}>2</div>
+                    <div>
+                      <div className="text-sm font-bold" style={{color: NAVY}}>You receive your revenue share daily</div>
+                      <div className="text-xs" style={{color:'#6b7a99'}}>21 days after each sale, your share is deposited directly into your LLC&apos;s bank account via ACH. No invoicing, no waiting for checks.</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 items-start">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white" style={{background: NAVY}}>3</div>
+                    <div>
+                      <div className="text-sm font-bold" style={{color: NAVY}}>You pay your own expenses from your share</div>
+                      <div className="text-xs" style={{color:'#6b7a99'}}>Ingredients, supplies, and any staff you hire are your responsibility. You control your costs, which means you control your profit.</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 items-start">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold" style={{background:'#1a6b3a', color:'white'}}>$</div>
+                    <div>
+                      <div className="text-sm font-bold" style={{color:'#1a6b3a'}}>What&apos;s left is yours</div>
+                      <div className="text-xs" style={{color:'#6b7a99'}}>Revenue share minus COGS minus payroll = your take-home income. Top operators earn $150k+.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Locations */}
+              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>Available Locations</h2>
+                <p className="text-xs mb-4" style={{color:'#6b7a99'}}>We have openings across our Connecticut and New York locations. Store hours: Mon&ndash;Sat 10am&ndash;7pm, Sun 10am&ndash;6pm.</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {STORES.map(s => (
+                    <div key={s} className="rounded-lg p-4 text-center" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
+                      <div className="text-sm font-bold" style={{color: NAVY}}>{STORE_LABELS[s]}</div>
+                      <div className="text-xs mt-1" style={{color: GOLD_ACCENT}}>Now Recruiting</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div className="rounded-xl p-8 text-center" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+                <div className="text-2xl font-bold text-white mb-2">Ready to run your own sushi business?</div>
+                <div className="text-sm mb-4" style={{color:'rgba(255,255,255,0.6)'}}>
+                  Check out the Income Calculator tab to see what you could earn, or reach out to start the conversation.
+                </div>
+                <div className="inline-flex gap-3">
+                  <button onClick={() => setTab('income')}
+                    className="px-6 py-3 rounded-lg text-sm font-bold"
+                    style={{background: GOLD_ACCENT, color: NAVY}}>
+                    Calculate Your Income
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* INCOME CALCULATOR */}
+          {tab === 'income' && (
+            <IncomeCalculator />
           )}
 
         </main>
