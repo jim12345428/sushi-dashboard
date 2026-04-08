@@ -745,9 +745,14 @@ function calcCurrentCosts(storeKey, revenue, concessionCogsRate, convertTempsToS
 
   let empLabor, tempLabor;
   if (convertTempsToStaff) {
-    // Replace temp days with internal employees (each covers 6 days/wk at 50 hrs)
-    const totalEmpsNeeded = Math.ceil(personDaysNeeded / 6);
-    empLabor = totalEmpsNeeded * empAnnual;
+    // Convert temp days to hourly employee cost
+    // Mon-Sat shifts = 9 hrs, Sun = 8 hrs. Approximate avg = ~8.86 hrs/day
+    // But simpler: temp days x avg hrs/day, then apply $25/hr + OT if >40 + burden
+    const tempHrsPerWeek = tempDaysPerWeek * (STORE_HRS_WEEK / 7); // proportional hrs
+    const convertedRegHrs = Math.min(tempHrsPerWeek, 40);
+    const convertedOtHrs = Math.max(0, tempHrsPerWeek - 40);
+    const convertedWeekly = (convertedRegHrs * EMP_RATE + convertedOtHrs * EMP_RATE * 1.5) * 1.14;
+    empLabor = m.emps * empAnnual + convertedWeekly * WEEKS;
     tempLabor = 0;
   } else {
     empLabor = m.emps * empAnnual;
