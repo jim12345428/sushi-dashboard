@@ -777,27 +777,19 @@ function ModelComparison({ storeSales }) {
         byMonth[key] = (byMonth[key] || 0) + s.gross;
       });
 
-      // Use last complete month as end (exclude Apr 2026 partial)
-      const allMonthKeys = Object.keys(byMonth).sort();
-      const lastMonth = allMonthKeys[allMonthKeys.length - 1]; // e.g. 2026-04
-      const lastComplete = allMonthKeys[allMonthKeys.length - 2]; // e.g. 2026-03
-
-      // Trailing 12 complete months
-      const [lcY, lcM] = lastComplete.split('-').map(Number);
-      const t12Months = [];
-      for (let i = 0; i < 12; i++) {
-        let mo = lcM - i, yr = lcY;
-        while (mo <= 0) { mo += 12; yr--; }
-        t12Months.push(yr + '-' + String(mo).padStart(2, '0'));
-      }
+      // Fixed analysis period: April 2025 - March 2026
+      const ANALYSIS_MONTHS = [
+        '2025-04','2025-05','2025-06','2025-07','2025-08','2025-09',
+        '2025-10','2025-11','2025-12','2026-01','2026-02','2026-03',
+      ];
+      const PRIOR_MONTHS = [
+        '2024-04','2024-05','2024-06','2024-07','2024-08','2024-09',
+        '2024-10','2024-11','2024-12','2025-01','2025-02','2025-03',
+      ];
 
       let trailing12 = 0, prior12 = 0;
-      t12Months.forEach(m => {
-        trailing12 += byMonth[m] || 0;
-        const [y, mo] = m.split('-');
-        const priorKey = (parseInt(y) - 1) + '-' + mo;
-        prior12 += byMonth[priorKey] || 0;
-      });
+      ANALYSIS_MONTHS.forEach(m => { trailing12 += byMonth[m] || 0; });
+      PRIOR_MONTHS.forEach(m => { prior12 += byMonth[m] || 0; });
 
       const actualGrowth = prior12 > 0 ? (trailing12 - prior12) / prior12 : 0;
 
@@ -824,14 +816,12 @@ function ModelComparison({ storeSales }) {
       const propOp = calcProposedOperatorCosts(storeKey, proposedRevenue);
       const opTakeHome = proposedPayout - propOp.cogs - propOp.payroll;
 
-      // Monthly YoY breakdown (exclude incomplete months)
+      // Monthly YoY breakdown for analysis period only
       const monthlyYoY = [];
-      const sortedMonths = Object.keys(byMonth).sort();
-      sortedMonths.forEach(m => {
-        if (m === lastMonth) return; // skip incomplete
+      ANALYSIS_MONTHS.forEach(m => {
         const [y, mo] = m.split('-');
         const priorKey = (parseInt(y) - 1) + '-' + mo;
-        if (byMonth[priorKey]) {
+        if (byMonth[m] && byMonth[priorKey]) {
           monthlyYoY.push({
             month: m,
             current: byMonth[m],
@@ -876,7 +866,7 @@ function ModelComparison({ storeSales }) {
         <h1 className="text-xl font-bold" style={{color: NAVY}}>Model Comparison</h1>
         <p className="text-sm mt-1" style={{color:'#6b7a99'}}>
           What actually happened (current model) vs what would have happened with owner-operators at a hypothetical growth rate.
-          Last 12 complete months of data.
+          Analysis period: April 2025 &ndash; March 2026.
         </p>
       </div>
 
