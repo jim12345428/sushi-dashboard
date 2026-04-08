@@ -805,7 +805,7 @@ function ModelComparison({ storeSales }) {
     if (!hasData) return;
     const defaults = {};
     STORES.forEach(s => {
-      const actual = Math.round(actualRates[s] * 100);
+      const actual = Math.round(actualRates[s] * 1000) / 10;
       defaults[s] = actual < 6 ? 6 : actual;
     });
     setStoreGrowth(defaults);
@@ -959,7 +959,7 @@ function ModelComparison({ storeSales }) {
       <div className="rounded-xl p-4 mb-6 flex items-center gap-4" style={{background:'white', border:'1px solid #dde4ed'}}>
         <div className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Set all stores to:</div>
         <div className="flex items-center gap-1">
-          <input type="number" min="-20" max="50" step="1"
+          <input type="number" min="-20" max="50" step="0.1"
             className="w-16 rounded-lg border px-2 py-1 text-sm font-bold text-center"
             style={{borderColor:'#dde4ed', color: NAVY}}
             onChange={e => { const v = Number(e.target.value); setStoreGrowth(Object.fromEntries(STORES.map(s => [s, v]))); }}
@@ -968,7 +968,7 @@ function ModelComparison({ storeSales }) {
         </div>
         <button onClick={() => {
             const defaults = {};
-            STORES.forEach(s => { const a = Math.round(actualRates[s] * 100); defaults[s] = a < 6 ? 6 : a; });
+            STORES.forEach(s => { const a = Math.round(actualRates[s] * 1000) / 10; defaults[s] = a < 6 ? 6 : a; });
             setStoreGrowth(defaults);
           }}
           className="text-xs px-3 py-1 rounded-lg ml-2" style={{background:'#f0f4f8', color:'#6b7a99', border:'1px solid #dde4ed'}}>
@@ -1052,10 +1052,10 @@ function ModelComparison({ storeSales }) {
                       {a.curOpTakeHome != null ? fmt(a.curOpTakeHome) : '-'}
                     </td>
                     <td className="px-3 py-3 text-center" style={{borderLeft:'2px solid #e8d38a'}}>
-                      <input type="number" min="-20" max="50" step="1"
-                        value={storeGrowth[a.storeKey] || 0}
+                      <input type="number" min="-20" max="50" step="0.1"
+                        value={storeGrowth[a.storeKey] ?? 0}
                         onChange={e => setStoreGrowth(prev => ({...prev, [a.storeKey]: Number(e.target.value)}))}
-                        className="w-14 rounded border px-1 py-0.5 text-xs font-bold text-center"
+                        className="w-16 rounded border px-1 py-0.5 text-xs font-bold text-center"
                         style={{borderColor:'#e8d38a', color: a.gRate > 0 ? '#1a6b3a' : a.gRate < 0 ? '#b5282a' : NAVY}} />
                     </td>
                     <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>{fmt(a.proposedRevenue)}</td>
