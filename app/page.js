@@ -1058,22 +1058,22 @@ function ModelComparison({ storeSales }) {
                       {STORE_LABELS[a.storeKey]}
                       <div className="font-normal text-xs" style={{color:'#8899aa', fontSize:'10px'}}>{a.currentModel}</div>
                     </td>
-                    <td className="px-3 py-3 text-center" style={{color:'#6b7a99'}}>{a.crew}</td>
-                    <td className="px-3 py-3 text-right font-medium" style={{color: a.actualGrowth > 0 ? '#1a6b3a' : a.actualGrowth < 0 ? '#b5282a' : '#6b7a99'}}>
+                    <td className="px-3 py-3 text-center" style={{color:'#6b7a99'}} title={a.crew + ' person(s) in store at all times. ' + STORE_HRS_WEEK + ' store hrs/wk x ' + a.crew + ' = ' + storePersonHrs(a.storeKey) + ' person-hrs/wk needed'}>{a.crew}</td>
+                    <td className="px-3 py-3 text-right font-medium" title={'Apr 2025-Mar 2026 revenue vs Apr 2024-Mar 2025. Prior year: ' + fmt(a.prior12) + ', Current: ' + fmt(a.actualRevenue)} style={{color: a.actualGrowth > 0 ? '#1a6b3a' : a.actualGrowth < 0 ? '#b5282a' : '#6b7a99'}}>
                       {a.actualGrowth > 0 ? '+' : ''}{(a.actualGrowth * 100).toFixed(1)}%
                     </td>
-                    <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmt(a.actualRevenue)}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#3a4a8a', background:'rgba(237,246,251,0.4)'}}>{a.curEmpLabor > 0 ? fmt(a.curEmpLabor) : '-'}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{a.curTempLabor > 0 ? fmt(a.curTempLabor) : '-'}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{a.curCogs > 0 ? fmt(a.curCogs) : '-'}</td>
-                    <td className="px-3 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>
+                    <td className="px-3 py-3 text-right" title={'Actual POS revenue Apr 2025 - Mar 2026'} style={{color:'#445566', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmt(a.actualRevenue)}</td>
+                    <td className="px-3 py-3 text-right" title={a.curEmpLabor > 0 ? (a.isConcession ? 'N/A - concession' : CURRENT_MODELS[a.storeKey].emps + ' employee(s) x 50 hrs/wk (40 reg + 10 OT @ 1.5x) x $25/hr x 14% burden x 52 wks') : 'No employees - ' + (a.isConcession ? 'concession model' : 'all temps')} style={{color:'#3a4a8a', background:'rgba(237,246,251,0.4)'}}>{a.curEmpLabor > 0 ? fmt(a.curEmpLabor) : '-'}</td>
+                    <td className="px-3 py-3 text-right" title={a.curTempLabor > 0 ? 'Gap hours covered by temps @ $335/day ($37.22/hr). ' + (storePersonHrs(a.storeKey) - (CURRENT_MODELS[a.storeKey].emps || 0) * 50) + ' hrs/wk x $37.22 x 52 wks' : a.isConcession ? 'N/A - concession' : 'No temp coverage needed'} style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{a.curTempLabor > 0 ? fmt(a.curTempLabor) : '-'}</td>
+                    <td className="px-3 py-3 text-right" title={a.curCogs > 0 ? 'Fjord pays COGS at 18% of revenue. ' + fmt(a.actualRevenue) + ' x 18%' : 'Operator pays own COGS under concession model'} style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{a.curCogs > 0 ? fmt(a.curCogs) : '-'}</td>
+                    <td className="px-3 py-3 text-right font-semibold" title={a.isConcession ? 'Revenue - operator payout (' + (CURRENT_MODELS[a.storeKey].pct * 100) + '%). Fjord keeps ' + pct(1 - CURRENT_MODELS[a.storeKey].pct) : 'Revenue - employee labor - temp labor - COGS'} style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
+                    <td className="px-3 py-3 text-right" title={a.curOpCogs != null ? 'Concession operator COGS at ' + concCogsRate + '% of revenue' : 'N/A - Fjord pays COGS in-house'} style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>
                       {a.curOpCogs != null ? fmt(a.curOpCogs) : '-'}
                     </td>
-                    <td className="px-3 py-3 text-right" style={{color:'#3a4a8a', background:'rgba(237,246,251,0.4)'}}>
+                    <td className="px-3 py-3 text-right" title={a.curOpLabor != null ? 'Operator staffing: ' + additionalStaffHrs(a.storeKey) + ' hrs/wk x $25/hr x 14% burden x 52 wks' : 'N/A - Fjord pays labor in-house'} style={{color:'#3a4a8a', background:'rgba(237,246,251,0.4)'}}>
                       {a.curOpLabor != null ? fmt(a.curOpLabor) : '-'}
                     </td>
-                    <td className="px-3 py-3 text-right font-medium" style={{color: a.curOpTakeHome != null ? (a.curOpTakeHome >= 70000 ? '#1a6b3a' : '#b5282a') : '#ccd4e0', background:'rgba(237,246,251,0.4)'}}>
+                    <td className="px-3 py-3 text-right font-medium" title={a.curOpTakeHome != null ? 'Operator payout (' + (CURRENT_MODELS[a.storeKey].pct * 100) + '%) minus COGS minus labor' : 'N/A - no independent operator'} style={{color: a.curOpTakeHome != null ? (a.curOpTakeHome >= 70000 ? '#1a6b3a' : '#b5282a') : '#ccd4e0', background:'rgba(237,246,251,0.4)'}}>
                       {a.curOpTakeHome != null ? fmt(a.curOpTakeHome) : '-'}
                     </td>
                     <td className="px-3 py-3 text-center" style={{borderLeft:'2px solid #e8d38a'}}>
@@ -1081,15 +1081,16 @@ function ModelComparison({ storeSales }) {
                         value={storeGrowth[a.storeKey] ?? 0}
                         onChange={e => setStoreGrowth(prev => ({...prev, [a.storeKey]: Number(e.target.value)}))}
                         className="w-16 rounded border px-1 py-0.5 text-xs font-bold text-center"
+                        title={'Hypothetical YoY growth for proposed model. Prior year revenue: ' + fmt(a.prior12)}
                         style={{borderColor:'#e8d38a', color: a.gRate > 0 ? '#1a6b3a' : a.gRate < 0 ? '#b5282a' : NAVY}} />
                     </td>
-                    <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>{fmt(a.proposedRevenue)}</td>
-                    <td className="px-3 py-3 text-right" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedPayout)}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propCogs)}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#3a4a8a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propPayroll)}</td>
-                    <td className="px-3 py-3 text-right font-medium" style={{color: thColor, background:'rgba(253,248,236,0.4)'}}>{fmt(a.opTakeHome)}</td>
-                    <td className="px-3 py-3 text-right font-semibold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
-                    <td className="px-3 py-3 text-right font-bold" style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
+                    <td className="px-3 py-3 text-right" title={'Prior year (' + fmt(a.prior12) + ') x (1 + ' + (a.gRate * 100).toFixed(1) + '%)'} style={{color:'#445566', background:'rgba(253,248,236,0.4)', borderLeft:'2px solid #e8d38a'}}>{fmt(a.proposedRevenue)}</td>
+                    <td className="px-3 py-3 text-right" title={'Tiered share: 62% on first $300k, 55% on $300-500k, 49% on $500-700k, 43% above $700k' + (a.growthBonus > 0 ? '. Includes ' + fmt(a.growthBonus) + ' growth bonus' : '')} style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedPayout)}</td>
+                    <td className="px-3 py-3 text-right" title={'Operator pays COGS at ' + opCogsRate + '% of revenue. ' + fmt(a.proposedRevenue) + ' x ' + opCogsRate + '%'} style={{color:'#8a5c1a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propCogs)}</td>
+                    <td className="px-3 py-3 text-right" title={additionalStaffHrs(a.storeKey) + ' additional hrs/wk x $25/hr x 14% burden x 52 wks. Operator works 50 hrs, store needs ' + storePersonHrs(a.storeKey) + ' person-hrs'} style={{color:'#3a4a8a', background:'rgba(253,248,236,0.4)'}}>{fmt(a.propPayroll)}</td>
+                    <td className="px-3 py-3 text-right font-medium" title={'Operator payout (' + fmt(a.proposedPayout) + ') minus COGS (' + fmt(a.propCogs) + ') minus labor (' + fmt(a.propPayroll) + ')'} style={{color: thColor, background:'rgba(253,248,236,0.4)'}}>{fmt(a.opTakeHome)}</td>
+                    <td className="px-3 py-3 text-right font-semibold" title={'Revenue (' + fmt(a.proposedRevenue) + ') minus operator payout (' + fmt(a.proposedPayout) + ')'} style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.4)'}}>{fmt(a.proposedFjord)}</td>
+                    <td className="px-3 py-3 text-right font-bold" title={'Proposed Fjord net (' + fmt(a.proposedFjord) + ') minus current Fjord net (' + fmt(a.currentFjord) + ')'} style={{color: deltaColor, borderLeft:'2px solid #dde4ed'}}>
                       {a.delta >= 0 ? '+' : ''}{fmt(a.delta)}
                     </td>
                   </tr>
