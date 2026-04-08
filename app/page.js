@@ -724,25 +724,36 @@ const CURRENT_MODELS = {
   'new canaan': { type: 'inhouse', emps: 2, empHrs: 50, cogsRate: 0.18, label: '2 emps + temps, 18% COGS' },
 };
 
-function calcCurrentCosts(storeKey, revenue, concessionCogsRate) {
+function calcCurrentCosts(storeKey, revenue, concessionCogsRate, convertTempsToStaff) {
   const m = CURRENT_MODELS[storeKey];
   if (m.type === 'concession') {
     const operatorPay = revenue * m.pct;
     const opCogs = revenue * concessionCogsRate;
     const opLabor = additionalStaffHrs(storeKey) * 25 * 52 * 1.25;
     const opTakeHome = operatorPay - opCogs - opLabor;
-    return { labor: operatorPay, cogs: 0, fjord: revenue - operatorPay, opCogs, opLabor, opTakeHome };
+    return { empLabor: 0, tempLabor: 0, labor: operatorPay, cogs: 0, fjord: revenue - operatorPay, opCogs, opLabor, opTakeHome };
   }
   const WEEKS = 52, EMP_RATE = 25, TEMP_DAY = 335;
-  const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.25; // OT + burden
+  const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.25;
   const empAnnual = empWeekly * WEEKS;
   const totalEmpHrs = m.emps * m.empHrs;
   const needed = storePersonHrs(storeKey);
-  const gapHrs = m.emps === 0 ? 0 : Math.max(0, needed - totalEmpHrs);
-  const tempCost = m.emps === 0 ? 7 * TEMP_DAY * WEEKS : gapHrs * (TEMP_DAY / 9) * WEEKS;
-  const labor = m.emps * empAnnual + tempCost;
+
+  let empLabor, tempLabor;
+  if (convertTempsToStaff) {
+    // Replace all temp hours with internal staff at $25/hr + OT + burden
+    // Total person-hours needed, covered by internal employees
+    const totalStaffNeeded = Math.ceil(needed / 50); // each employee does 50 hrs
+    empLabor = totalStaffNeeded * empAnnual;
+    tempLabor = 0;
+  } else {
+    empLabor = m.emps * empAnnual;
+    const gapHrs = m.emps === 0 ? 0 : Math.max(0, needed - totalEmpHrs);
+    tempLabor = m.emps === 0 ? 7 * TEMP_DAY * WEEKS : gapHrs * (TEMP_DAY / 9) * WEEKS;
+  }
+  const labor = empLabor + tempLabor;
   const cogs = revenue * m.cogsRate;
-  return { labor, cogs, fjord: revenue - labor - cogs, opCogs: null, opLabor: null, opTakeHome: null };
+  return { empLabor, tempLabor, labor, cogs, fjord: revenue - labor - cogs, opCogs: null, opLabor: null, opTakeHome: null };
 }
 
 function calcProposedPayout(revenue) {
@@ -797,6 +808,7 @@ function ModelComparison({ storeSales }) {
   const [initialized, setInitialized] = useState(false);
   const [opCogsRate, setOpCogsRate] = useState(20);
   const [concCogsRate, setConcCogsRate] = useState(20);
+  const [convertTemps, setConvertTemps] = useState(false);
 
   // Set defaults once data loads: 6% floor, otherwise actual YoY
   useEffect(() => {
@@ -834,7 +846,7 @@ function ModelComparison({ storeSales }) {
 
       // Current model uses ACTUAL trailing 12 revenue
       const actualRevenue = trailing12;
-      const cur = calcCurrentCosts(storeKey, actualRevenue, concCogsRate / 100);
+      const cur = calcCurrentCosts(storeKey, actualRevenue, concCogsRate / 100, convertTemps);
 
       // Proposed model uses prior year × hypothetical growth
       const gRate = (storeGrowth[storeKey] || 0) / 100;
@@ -878,7 +890,7 @@ function ModelComparison({ storeSales }) {
         proposedRevenue,
         currentModel: CURRENT_MODELS[storeKey].label,
         isConcession: CURRENT_MODELS[storeKey].type === 'concession',
-        curLabor: cur.labor, curCogs: cur.cogs, currentFjord: cur.fjord,
+        curEmpLabor: cur.empLabor, curTempLabor: cur.tempLabor, curLabor: cur.labor, curCogs: cur.cogs, currentFjord: cur.fjord,
         curOpCogs: cur.opCogs, curOpLabor: cur.opLabor, curOpTakeHome: cur.opTakeHome,
         crew: CREW_SIZE[storeKey], gRate,
         proposedPayout, proposedFjord, growthBonus,
@@ -887,12 +899,13 @@ function ModelComparison({ storeSales }) {
         monthlyYoY,
       };
     }).filter(Boolean);
-  }, [storeSales, storeGrowth, opCogsRate, concCogsRate]);
+  }, [storeSales, storeGrowth, opCogsRate, concCogsRate, convertTemps]);
 
   const totals = useMemo(() => {
-    const t = { actRev:0, propRev:0, curLabor:0, curCogs:0, curFjord:0, curOpCogs:0, curOpLabor:0, curOpTH:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
+    const t = { actRev:0, propRev:0, curEmpLabor:0, curTempLabor:0, curLabor:0, curCogs:0, curFjord:0, curOpCogs:0, curOpLabor:0, curOpTH:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
     analysis.forEach(a => {
       t.actRev += a.actualRevenue; t.propRev += a.proposedRevenue;
+      t.curEmpLabor += a.curEmpLabor; t.curTempLabor += a.curTempLabor;
       t.curLabor += a.curLabor; t.curCogs += a.curCogs; t.curFjord += a.currentFjord;
       t.curOpCogs += a.curOpCogs || 0; t.curOpLabor += a.curOpLabor || 0; t.curOpTH += a.curOpTakeHome || 0;
       t.propPayout += a.proposedPayout; t.propCogs += a.propCogs; t.propPayroll += a.propPayroll;
@@ -937,6 +950,16 @@ function ModelComparison({ storeSales }) {
               <strong style={{color: NAVY}}>{val}</strong>
             </div>
           ))}
+        </div>
+        <div className="flex items-center gap-3 mt-3 pt-3" style={{borderTop:'1px solid #eef1f6'}}>
+          <label className="flex items-center gap-2 cursor-pointer text-xs">
+            <input type="checkbox" checked={convertTemps} onChange={e => setConvertTemps(e.target.checked)}
+              className="rounded" />
+            <span style={{color: NAVY, fontWeight: 600}}>Convert all temp staffing to internal employees in current model</span>
+          </label>
+          <span className="text-xs" style={{color:'#8899aa'}}>
+            {convertTemps ? '(temps replaced with $25/hr + OT + burden employees)' : '(using actual temp rates @ $335/day)'}
+          </span>
         </div>
       </div>
 
@@ -1003,15 +1026,16 @@ function ModelComparison({ storeSales }) {
                 <th rowSpan={2} className="text-left px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
                 <th rowSpan={2} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Crew</th>
                 <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Actual YoY</th>
-                <th colSpan={7} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model (Actual)</th>
+                <th colSpan={8} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model (Actual)</th>
                 <th rowSpan={2} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, borderLeft:'2px solid #e8d38a'}}>Growth</th>
                 <th colSpan={6} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Proposed Owner-Operator Model</th>
                 <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
               </tr>
               <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb', fontSize:'10px'}}>Revenue</th>
-                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#edf6fb', fontSize:'10px'}}>Fjord Labor</th>
-                <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', fontSize:'10px'}}>Fjord COGS</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#3a4a8a', background:'#edf6fb', fontSize:'10px'}}>Emp Labor</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#edf6fb', fontSize:'10px'}}>Temp Labor</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', fontSize:'10px'}}>COGS</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#1a6b8a', background:'#edf6fb', fontSize:'10px'}}>Fjord Net</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#edf6fb', fontSize:'10px'}}>Op COGS</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#3a4a8a', background:'#edf6fb', fontSize:'10px'}}>Op Labor</th>
@@ -1039,7 +1063,8 @@ function ModelComparison({ storeSales }) {
                       {a.actualGrowth > 0 ? '+' : ''}{(a.actualGrowth * 100).toFixed(1)}%
                     </td>
                     <td className="px-3 py-3 text-right" style={{color:'#445566', background:'rgba(237,246,251,0.4)', borderLeft:'2px solid #e0eef7'}}>{fmt(a.actualRevenue)}</td>
-                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.curLabor)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#3a4a8a', background:'rgba(237,246,251,0.4)'}}>{a.curEmpLabor > 0 ? fmt(a.curEmpLabor) : '-'}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{a.curTempLabor > 0 ? fmt(a.curTempLabor) : '-'}</td>
                     <td className="px-3 py-3 text-right" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{a.curCogs > 0 ? fmt(a.curCogs) : '-'}</td>
                     <td className="px-3 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
                     <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>
@@ -1077,7 +1102,8 @@ function ModelComparison({ storeSales }) {
                 <td className="px-3 py-3"></td>
                 <td className="px-3 py-3"></td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(237,246,251,0.6)', borderLeft:'2px solid #b3d9eb'}}>{fmt(totals.actRev)}</td>
-                <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curLabor)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#3a4a8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curEmpLabor)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curTempLabor)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curCogs)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.6)'}}>{totals.curOpCogs > 0 ? fmt(totals.curOpCogs) : '-'}</td>
