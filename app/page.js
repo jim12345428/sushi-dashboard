@@ -715,6 +715,31 @@ function storePersonHrs(storeKey) { return STORE_HRS_WEEK * CREW_SIZE[storeKey];
 // Additional staff hours beyond what the operator covers (50 hrs/wk across 6 days)
 function additionalStaffHrs(storeKey) { return storePersonHrs(storeKey) - 50; }
 
+// Head of Sushi: all stores fully staffed by Fjord employees
+const HEAD_SUSHI_TIERS = [
+  { upTo: 1200000, pct: 0.07 },
+  { upTo: 1600000, pct: 0.08 },
+  { upTo: Infinity, pct: 0.10 },
+];
+
+function calcHeadSushiStoreLaborAllEmp(storeKey) {
+  const personDays = CREW_SIZE[storeKey] * 7;
+  const empsNeeded = Math.ceil(personDays / 6);
+  const empWeekly = (40 * 25 + 10 * 25 * 1.5) * 1.14;
+  return empsNeeded * empWeekly * 52;
+}
+
+function calcHeadSushiComp(primeMargin) {
+  let comp = 0, prev = 0;
+  for (const t of HEAD_SUSHI_TIERS) {
+    const tierAmt = Math.min(primeMargin, t.upTo) - prev;
+    if (tierAmt <= 0) break;
+    comp += tierAmt * t.pct;
+    prev = t.upTo;
+  }
+  return comp;
+}
+
 const CURRENT_MODELS = {
   brooklyn:     { type: 'concession', pct: 0.70,  label: 'Concession 70%' },
   darien:       { type: 'concession', pct: 0.525, label: 'Concession 52.5%' },
@@ -889,6 +914,11 @@ function ModelComparison({ storeSales }) {
         }
       });
 
+      // Head of Sushi scenario: all Fjord employees, 18% COGS
+      const hosLabor = calcHeadSushiStoreLaborAllEmp(storeKey);
+      const hosCogs = actualRevenue * 0.18;
+      const hosPrime = actualRevenue - hosLabor - hosCogs;
+
       return {
         storeKey,
         actualRevenue,
@@ -899,6 +929,7 @@ function ModelComparison({ storeSales }) {
         isConcession: CURRENT_MODELS[storeKey].type === 'concession',
         curEmpLabor: cur.empLabor, curTempLabor: cur.tempLabor, curLabor: cur.labor, curCogs: cur.cogs, currentFjord: cur.fjord,
         curOpCogs: cur.opCogs, curOpLabor: cur.opLabor, curOpTakeHome: cur.opTakeHome,
+        hosLabor, hosCogs, hosPrime,
         crew: CREW_SIZE[storeKey], gRate,
         proposedPayout, proposedFjord, growthBonus,
         propCogs: propOp.cogs, propPayroll: propOp.payroll, opTakeHome,
@@ -909,16 +940,20 @@ function ModelComparison({ storeSales }) {
   }, [storeSales, storeGrowth, opCogsRate, concCogsRate, convertTemps]);
 
   const totals = useMemo(() => {
-    const t = { actRev:0, propRev:0, curEmpLabor:0, curTempLabor:0, curLabor:0, curCogs:0, curFjord:0, curOpCogs:0, curOpLabor:0, curOpTH:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
+    const t = { actRev:0, propRev:0, curEmpLabor:0, curTempLabor:0, curLabor:0, curCogs:0, curFjord:0, curOpCogs:0, curOpLabor:0, curOpTH:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0, hosLabor:0, hosCogs:0, hosPrime:0 };
     analysis.forEach(a => {
       t.actRev += a.actualRevenue; t.propRev += a.proposedRevenue;
       t.curEmpLabor += a.curEmpLabor; t.curTempLabor += a.curTempLabor;
       t.curLabor += a.curLabor; t.curCogs += a.curCogs; t.curFjord += a.currentFjord;
+      t.hosLabor += a.hosLabor; t.hosCogs += a.hosCogs; t.hosPrime += a.hosPrime;
       t.curOpCogs += a.curOpCogs || 0; t.curOpLabor += a.curOpLabor || 0; t.curOpTH += a.curOpTakeHome || 0;
       t.propPayout += a.proposedPayout; t.propCogs += a.propCogs; t.propPayroll += a.propPayroll;
       t.opTH += a.opTakeHome; t.newFjord += a.proposedFjord;
     });
+    t.hosComp = calcHeadSushiComp(t.hosPrime);
+    t.hosFjord = t.hosPrime - t.hosComp;
     t.delta = t.newFjord - t.curFjord;
+    t.hosDelta = t.hosFjord - t.curFjord;
     return t;
   }, [analysis]);
 
@@ -1373,6 +1408,96 @@ function ModelComparison({ storeSales }) {
               })()}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Head of Sushi Scenario */}
+      <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99', background:'#f0e6fb', borderBottom:'1px solid #d4b8e8'}}>
+          Scenario 3: Head of Sushi (Fjord Employee) &mdash; Comp on Prime Margin (Revenue &minus; COGS &minus; Labor)
+        </div>
+        <div className="p-4">
+          <div className="grid grid-cols-3 gap-6 mb-4">
+            <div>
+              <div className="text-xs font-medium mb-2" style={{color: NAVY}}>Comp Tiers (% of Prime Margin)</div>
+              {HEAD_SUSHI_TIERS.map((t, i) => {
+                const prevUp = i > 0 ? HEAD_SUSHI_TIERS[i-1].upTo : 0;
+                return (
+                  <div key={i} className="flex justify-between text-xs py-1" style={{borderBottom:'1px solid #eef1f6'}}>
+                    <span style={{color:'#8899aa'}}>
+                      {t.upTo === Infinity ? '$' + (prevUp/1000) + 'k+' : (i === 0 ? 'First $' + (t.upTo/1000) + 'k' : '$' + (prevUp/1000) + 'k\u2013$' + (t.upTo/1000) + 'k')}
+                    </span>
+                    <strong style={{color: NAVY}}>{(t.pct * 100)}%</strong>
+                  </div>
+                );
+              })}
+            </div>
+            <div>
+              <div className="text-xs font-medium mb-2" style={{color: NAVY}}>How It Works</div>
+              <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>
+                All stores staffed with Fjord employees (no temps, no concessions). Head of Sushi manages all locations.
+                Comp is a tiered % of aggregate prime margin across all 6 stores.
+                Employees: {Math.ceil(7/6)*2 + Math.ceil(14/6)*4} total across all stores.
+              </div>
+            </div>
+            <div className="rounded-lg p-4" style={{background:'#f0e6fb', border:'1px solid #d4b8e8'}}>
+              <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#6b7a99'}}>Head of Sushi Comp</div>
+              <div className="text-2xl font-bold" style={{color:'#6b3a8a'}}>{fmt(totals.hosComp)}</div>
+              <div className="text-xs mt-1" style={{color:'#8899aa'}}>on {fmt(totals.hosPrime)} prime margin</div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
+                  <th className="text-left px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
+                  <th className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Emps</th>
+                  <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Revenue</th>
+                  <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#3a4a8a'}}>Labor</th>
+                  <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#8a5c1a'}}>COGS (18%)</th>
+                  <th className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b3a8a'}}>Prime Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.map(a => (
+                  <tr key={a.storeKey} style={{borderBottom:'1px solid #eef1f6'}}>
+                    <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>{STORE_LABELS[a.storeKey]}</td>
+                    <td className="px-3 py-2 text-center" style={{color:'#6b7a99'}}>{Math.ceil(CREW_SIZE[a.storeKey] * 7 / 6)}</td>
+                    <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmt(a.actualRevenue)}</td>
+                    <td className="px-3 py-2 text-right" style={{color:'#3a4a8a'}}>{fmt(a.hosLabor)}</td>
+                    <td className="px-3 py-2 text-right" style={{color:'#8a5c1a'}}>{fmt(a.hosCogs)}</td>
+                    <td className="px-3 py-2 text-right font-semibold" style={{color:'#6b3a8a'}}>{fmt(a.hosPrime)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{background:'#f0f4f8', borderTop:'2px solid ' + NAVY}}>
+                  <td className="px-3 py-2 font-bold uppercase text-xs" style={{color:'#6b7a99'}}>Total</td>
+                  <td className="px-3 py-2 text-center font-bold" style={{color:'#6b7a99'}}>{analysis.reduce((s,a) => s + Math.ceil(CREW_SIZE[a.storeKey] * 7 / 6), 0)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color:'#445566'}}>{fmt(totals.actRev)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color:'#3a4a8a'}}>{fmt(totals.hosLabor)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color:'#8a5c1a'}}>{fmt(totals.hosCogs)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color:'#6b3a8a'}}>{fmt(totals.hosPrime)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 mt-4">
+            <div className="rounded-lg p-3" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
+              <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>Prime Margin</div>
+              <div className="text-lg font-bold" style={{color:'#6b3a8a'}}>{fmt(totals.hosPrime)}</div>
+            </div>
+            <div className="rounded-lg p-3" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
+              <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>Head of Sushi Comp</div>
+              <div className="text-lg font-bold" style={{color:'#6b3a8a'}}>&minus;{fmt(totals.hosComp)}</div>
+            </div>
+            <div className="rounded-lg p-3" style={{background: totals.hosDelta >= 0 ? '#edfaf2' : '#fef2f2', border:'1px solid ' + (totals.hosDelta >= 0 ? '#9dd4b5' : '#f5c6c6')}}>
+              <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>Fjord Net (vs Current {fmt(totals.curFjord)})</div>
+              <div className="text-lg font-bold" style={{color: totals.hosDelta >= 0 ? '#1a6b3a' : '#b5282a'}}>{fmt(totals.hosFjord)} ({totals.hosDelta >= 0 ? '+' : ''}{fmt(totals.hosDelta)})</div>
+            </div>
+          </div>
         </div>
       </div>
 
