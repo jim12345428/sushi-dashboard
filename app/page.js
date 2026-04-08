@@ -724,11 +724,14 @@ const CURRENT_MODELS = {
   'new canaan': { type: 'inhouse', emps: 2, empHrs: 50, cogsRate: 0.18, label: '2 emps + temps, 18% COGS' },
 };
 
-function calcCurrentCosts(storeKey, revenue) {
+function calcCurrentCosts(storeKey, revenue, concessionCogsRate) {
   const m = CURRENT_MODELS[storeKey];
   if (m.type === 'concession') {
     const operatorPay = revenue * m.pct;
-    return { labor: operatorPay, cogs: 0, fjord: revenue - operatorPay, laborLabel: 'Operator ' + (m.pct * 100) + '%' };
+    const opCogs = revenue * concessionCogsRate;
+    const opLabor = additionalStaffHrs(storeKey) * 25 * 52 * 1.25;
+    const opTakeHome = operatorPay - opCogs - opLabor;
+    return { labor: operatorPay, cogs: 0, fjord: revenue - operatorPay, opCogs, opLabor, opTakeHome };
   }
   const WEEKS = 52, EMP_RATE = 25, TEMP_DAY = 335;
   const empWeekly = (40 * EMP_RATE + 10 * EMP_RATE * 1.5) * 1.25; // OT + burden
@@ -739,7 +742,7 @@ function calcCurrentCosts(storeKey, revenue) {
   const tempCost = m.emps === 0 ? 7 * TEMP_DAY * WEEKS : gapHrs * (TEMP_DAY / 9) * WEEKS;
   const labor = m.emps * empAnnual + tempCost;
   const cogs = revenue * m.cogsRate;
-  return { labor, cogs, fjord: revenue - labor - cogs, laborLabel: m.label };
+  return { labor, cogs, fjord: revenue - labor - cogs, opCogs: null, opLabor: null, opTakeHome: null };
 }
 
 function calcProposedPayout(revenue) {
@@ -764,6 +767,7 @@ function ModelComparison({ storeSales }) {
   const defaultGrowth = () => Object.fromEntries(STORES.map(s => [s, 10]));
   const [storeGrowth, setStoreGrowth] = useState(defaultGrowth);
   const [opCogsRate, setOpCogsRate] = useState(20);
+  const [concCogsRate, setConcCogsRate] = useState(20);
 
   const analysis = useMemo(() => {
     return STORES.map(storeKey => {
@@ -796,7 +800,7 @@ function ModelComparison({ storeSales }) {
 
       // Current model uses ACTUAL trailing 12 revenue
       const actualRevenue = trailing12;
-      const cur = calcCurrentCosts(storeKey, actualRevenue);
+      const cur = calcCurrentCosts(storeKey, actualRevenue, concCogsRate / 100);
 
       // Proposed model uses prior year × hypothetical growth
       const gRate = (storeGrowth[storeKey] || 0) / 100;
@@ -839,7 +843,9 @@ function ModelComparison({ storeSales }) {
         actualGrowth,
         proposedRevenue,
         currentModel: CURRENT_MODELS[storeKey].label,
+        isConcession: CURRENT_MODELS[storeKey].type === 'concession',
         curLabor: cur.labor, curCogs: cur.cogs, currentFjord: cur.fjord,
+        curOpCogs: cur.opCogs, curOpLabor: cur.opLabor, curOpTakeHome: cur.opTakeHome,
         crew: CREW_SIZE[storeKey], gRate,
         proposedPayout, proposedFjord, growthBonus,
         propCogs: propOp.cogs, propPayroll: propOp.payroll, opTakeHome,
@@ -847,13 +853,14 @@ function ModelComparison({ storeSales }) {
         monthlyYoY,
       };
     }).filter(Boolean);
-  }, [storeSales, storeGrowth, opCogsRate]);
+  }, [storeSales, storeGrowth, opCogsRate, concCogsRate]);
 
   const totals = useMemo(() => {
-    const t = { actRev:0, propRev:0, curLabor:0, curCogs:0, curFjord:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
+    const t = { actRev:0, propRev:0, curLabor:0, curCogs:0, curFjord:0, curOpCogs:0, curOpLabor:0, curOpTH:0, propPayout:0, propCogs:0, propPayroll:0, opTH:0, newFjord:0 };
     analysis.forEach(a => {
       t.actRev += a.actualRevenue; t.propRev += a.proposedRevenue;
       t.curLabor += a.curLabor; t.curCogs += a.curCogs; t.curFjord += a.currentFjord;
+      t.curOpCogs += a.curOpCogs || 0; t.curOpLabor += a.curOpLabor || 0; t.curOpTH += a.curOpTakeHome || 0;
       t.propPayout += a.proposedPayout; t.propCogs += a.propCogs; t.propPayroll += a.propPayroll;
       t.opTH += a.opTakeHome; t.newFjord += a.proposedFjord;
     });
@@ -901,13 +908,23 @@ function ModelComparison({ storeSales }) {
           className="text-xs px-3 py-1 rounded-lg ml-2" style={{background:'#f0f4f8', color:'#6b7a99', border:'1px solid #dde4ed'}}>
           Reset to 10%
         </button>
-        <div className="ml-auto flex items-center gap-1">
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Op COGS:</span>
-          <input type="number" min="10" max="35" step="1" value={opCogsRate}
-            onChange={e => setOpCogsRate(Number(e.target.value))}
-            className="w-14 rounded-lg border px-2 py-1 text-sm font-bold text-center"
-            style={{borderColor:'#dde4ed', color: NAVY}} />
-          <span className="text-sm font-bold" style={{color:'#6b7a99'}}>%</span>
+        <div className="ml-auto flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Concession COGS:</span>
+            <input type="number" min="10" max="35" step="1" value={concCogsRate}
+              onChange={e => setConcCogsRate(Number(e.target.value))}
+              className="w-14 rounded-lg border px-2 py-1 text-sm font-bold text-center"
+              style={{borderColor:'#dde4ed', color: NAVY}} />
+            <span className="text-sm font-bold" style={{color:'#6b7a99'}}>%</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Proposed COGS:</span>
+            <input type="number" min="10" max="35" step="1" value={opCogsRate}
+              onChange={e => setOpCogsRate(Number(e.target.value))}
+              className="w-14 rounded-lg border px-2 py-1 text-sm font-bold text-center"
+              style={{borderColor:'#dde4ed', color: NAVY}} />
+            <span className="text-sm font-bold" style={{color:'#6b7a99'}}>%</span>
+          </div>
         </div>
       </div>
 
@@ -920,16 +937,19 @@ function ModelComparison({ storeSales }) {
                 <th rowSpan={2} className="text-left px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Store</th>
                 <th rowSpan={2} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Crew</th>
                 <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99'}}>Actual YoY</th>
-                <th colSpan={4} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model (Actual)</th>
+                <th colSpan={7} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#1a6b8a', background:'#edf6fb', borderLeft:'2px solid #b3d9eb'}}>Current Model (Actual)</th>
                 <th rowSpan={2} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, borderLeft:'2px solid #e8d38a'}}>Growth</th>
                 <th colSpan={6} className="text-center px-3 py-2 font-semibold uppercase tracking-wide" style={{color: GOLD_ACCENT, background:'#fdf8ec', borderLeft:'2px solid #e8d38a'}}>Proposed Owner-Operator Model</th>
                 <th rowSpan={2} className="text-right px-3 py-2 font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderLeft:'2px solid #dde4ed'}}>Delta</th>
               </tr>
               <tr style={{background:'#f7f9fc', borderBottom:'2px solid #dde4ed'}}>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', borderLeft:'2px solid #b3d9eb', fontSize:'10px'}}>Revenue</th>
-                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#edf6fb', fontSize:'10px'}}>Labor/Op</th>
-                <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', fontSize:'10px'}}>COGS</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#edf6fb', fontSize:'10px'}}>Fjord Labor</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#edf6fb', fontSize:'10px'}}>Fjord COGS</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#1a6b8a', background:'#edf6fb', fontSize:'10px'}}>Fjord Net</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#edf6fb', fontSize:'10px'}}>Op COGS</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#3a4a8a', background:'#edf6fb', fontSize:'10px'}}>Op Labor</th>
+                <th className="text-right px-3 py-2 font-medium" style={{color:'#1a6b3a', background:'#edf6fb', fontSize:'10px'}}>Op Take-Home</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#6b7a99', background:'#fdf8ec', borderLeft:'2px solid #e8d38a', fontSize:'10px'}}>Revenue</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color: GOLD_ACCENT, background:'#fdf8ec', fontSize:'10px'}}>Op Payout</th>
                 <th className="text-right px-3 py-2 font-medium" style={{color:'#8a5c1a', background:'#fdf8ec', fontSize:'10px'}}>Op COGS</th>
@@ -956,6 +976,15 @@ function ModelComparison({ storeSales }) {
                     <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.curLabor)}</td>
                     <td className="px-3 py-3 text-right" style={{color:'#6b7a99', background:'rgba(237,246,251,0.4)'}}>{a.curCogs > 0 ? fmt(a.curCogs) : '-'}</td>
                     <td className="px-3 py-3 text-right font-semibold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.4)'}}>{fmt(a.currentFjord)}</td>
+                    <td className="px-3 py-3 text-right" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.4)'}}>
+                      {a.curOpCogs != null ? fmt(a.curOpCogs) : '-'}
+                    </td>
+                    <td className="px-3 py-3 text-right" style={{color:'#3a4a8a', background:'rgba(237,246,251,0.4)'}}>
+                      {a.curOpLabor != null ? fmt(a.curOpLabor) : '-'}
+                    </td>
+                    <td className="px-3 py-3 text-right font-medium" style={{color: a.curOpTakeHome != null ? (a.curOpTakeHome >= 70000 ? '#1a6b3a' : '#b5282a') : '#ccd4e0', background:'rgba(237,246,251,0.4)'}}>
+                      {a.curOpTakeHome != null ? fmt(a.curOpTakeHome) : '-'}
+                    </td>
                     <td className="px-3 py-3 text-center" style={{borderLeft:'2px solid #e8d38a'}}>
                       <input type="number" min="-20" max="50" step="1"
                         value={storeGrowth[a.storeKey] || 0}
@@ -985,6 +1014,9 @@ function ModelComparison({ storeSales }) {
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curLabor)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#6b7a99', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curCogs)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b8a', background:'rgba(237,246,251,0.6)'}}>{fmt(totals.curFjord)}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#8a5c1a', background:'rgba(237,246,251,0.6)'}}>{totals.curOpCogs > 0 ? fmt(totals.curOpCogs) : '-'}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#3a4a8a', background:'rgba(237,246,251,0.6)'}}>{totals.curOpLabor > 0 ? fmt(totals.curOpLabor) : '-'}</td>
+                <td className="px-3 py-3 text-right font-bold" style={{color:'#1a6b3a', background:'rgba(237,246,251,0.6)'}}>{totals.curOpTH !== 0 ? fmt(totals.curOpTH) : '-'}</td>
                 <td className="px-3 py-3" style={{borderLeft:'2px solid #e8d38a'}}></td>
                 <td className="px-3 py-3 text-right font-bold" style={{color:'#445566', background:'rgba(253,248,236,0.6)', borderLeft:'2px solid #e8d38a'}}>{fmt(totals.propRev)}</td>
                 <td className="px-3 py-3 text-right font-bold" style={{color: GOLD_ACCENT, background:'rgba(253,248,236,0.6)'}}>{fmt(totals.propPayout)}</td>
