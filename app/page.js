@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useChat } from '@ai-sdk/react';
 
 /* ── CONSTANTS ── */
 const LAG = 21;
@@ -705,6 +706,73 @@ function IncomeCalculator() {
   );
 }
 
+/* ── CHAT PANEL ── */
+function ChatPanel({ open, onClose }) {
+  const { messages, input, handleInputChange, sendMessage, status } = useChat();
+  const scrollRef = useRef(null);
+  const isLoading = status === 'streaming' || status === 'submitted';
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed bottom-20 right-6 w-96 rounded-xl overflow-hidden shadow-2xl z-50 flex flex-col"
+      style={{height:'500px', border:`2px solid ${GOLD_ACCENT}`, background:'white'}}>
+      <div className="px-4 py-3 flex items-center justify-between" style={{background: NAVY, borderBottom:`2px solid ${GOLD_ACCENT}`}}>
+        <div className="text-sm font-semibold text-white">Ask about your data</div>
+        <button onClick={onClose} className="text-white/50 hover:text-white text-lg">&times;</button>
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3" style={{background:'#f7f9fc'}}>
+        {messages.length === 0 && (
+          <div className="text-center py-8">
+            <div className="text-sm font-medium mb-2" style={{color: NAVY}}>Hi! Ask me anything about your stores.</div>
+            <div className="text-xs space-y-1" style={{color:'#8899aa'}}>
+              <div>&quot;How is Cos Cob performing this month?&quot;</div>
+              <div>&quot;Which store has the highest revenue?&quot;</div>
+              <div>&quot;What would my payout be at $600k revenue?&quot;</div>
+              <div>&quot;Compare Darien and New Canaan&quot;</div>
+            </div>
+          </div>
+        )}
+        {messages.map(m => (
+          <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+              m.role === 'user' ? 'text-white' : ''
+            }`} style={{
+              background: m.role === 'user' ? NAVY : 'white',
+              color: m.role === 'user' ? 'white' : '#445566',
+              border: m.role === 'user' ? 'none' : '1px solid #dde4ed',
+            }}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {isLoading && messages[messages.length - 1]?.role === 'user' && (
+          <div className="flex justify-start">
+            <div className="rounded-lg px-3 py-2 text-sm" style={{background:'white', border:'1px solid #dde4ed', color:'#8899aa'}}>
+              Thinking...
+            </div>
+          </div>
+        )}
+      </div>
+      <form onSubmit={e => { e.preventDefault(); if (input.trim()) sendMessage({ text: input }); }}
+        className="p-3 flex gap-2" style={{borderTop:'1px solid #dde4ed', background:'white'}}>
+        <input value={input} onChange={handleInputChange} placeholder="Ask a question..."
+          className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+          style={{borderColor:'#dde4ed'}} />
+        <button type="submit" disabled={isLoading || !input.trim()}
+          className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
+          style={{background: NAVY}}>
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+
 /* ── MAIN DASHBOARD ── */
 export default function Dashboard() {
   const [tab, setTab]             = useState('overview');
@@ -715,6 +783,7 @@ export default function Dashboard() {
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [openHistory, setOpenHistory] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -1432,6 +1501,14 @@ export default function Dashboard() {
         <span>&copy; 2026 Fjord Fish Market &middot; Sushi Counter Owner Portal</span>
         <span>{STORES.length} stores &middot; POS + Ottimate + ADP</span>
       </footer>
+
+      {/* Chat */}
+      <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
+      <button onClick={() => setChatOpen(o => !o)}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg flex items-center justify-center z-50 text-white text-xl"
+        style={{background: chatOpen ? '#6b7a99' : NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+        {chatOpen ? '\u2715' : '\u2709'}
+      </button>
     </div>
   );
 }
