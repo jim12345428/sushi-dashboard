@@ -1694,6 +1694,9 @@ function BoardScenarioComparison({ storeSales }) {
     return { rev, fjord };
   }, [storeSales, cogsRate]);
 
+  const aDelta = scenarioA.totals.fjord - currentTotals.fjord;
+  const bDelta = scenarioB.totalFjordNet - currentTotals.fjord;
+
   function exportBoardPdf() {
     const esc = s => (s || '').replace(/</g, '&lt;');
     const fmtLocal = v => '$' + Math.round(v).toLocaleString('en-US');
@@ -1738,8 +1741,6 @@ td.bold { font-weight: bold; }
     html += `</div>`;
 
     // Recommendation
-    const aDelta = scenarioA.totals.fjord - currentTotals.fjord;
-    const bDelta = scenarioB.totalFjordNet - currentTotals.fjord;
     const preferred = scenarioA.totals.fjord > scenarioB.totalFjordNet ? 'A' : 'B';
     const prefLabel = preferred === 'A' ? 'Owner-Operator' : 'Head of Sushi';
     const prefFjord = preferred === 'A' ? scenarioA.totals.fjord : scenarioB.totalFjordNet;
@@ -2857,7 +2858,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {!['modeler','overview','recruit','income','compare','roadmap'].includes(tab) && (
+        {!['modeler','overview','recruit','income','compare','board','roadmap'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
