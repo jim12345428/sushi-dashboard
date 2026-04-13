@@ -1526,6 +1526,450 @@ function ModelComparison({ storeSales }) {
 }
 
 /* ── ROADMAP ── */
+/* ── BOARD SCENARIO COMPARISON ── */
+const HOS_BASE = 80000;
+const HOS_INCENTIVE_RATE = 0.04; // 4% of each store's YoY increment
+const HOS_INCENTIVE_CAP = 70000; // max incentive per year
+const HOS_KICKER_THRESHOLDS = { full: 5, mid: 3 }; // # of stores growing
+const HOS_KICKER_RATES = { full: 0.25, mid: 0.18, low: 0.12 }; // kicker replaces base 4% when participation met
+
+function calcHeadOfSushiModel(storeSales, growthRates, cogsRate) {
+  const results = [];
+  let totalIncentive = 0;
+  let growingStores = 0;
+
+  // First pass: calculate each store's increment
+  const storeIncrements = [];
+  STORES.forEach(storeKey => {
+    const sales = storeSales[storeKey] || [];
+    const byMonth = {};
+    sales.forEach(s => {
+      const d = new Date(s.date);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      byMonth[key] = (byMonth[key] || 0) + s.gross;
+    });
+    let trailing12 = 0, prior12 = 0;
+    ANALYSIS_MONTHS.forEach(m => { trailing12 += byMonth[m] || 0; });
+    PRIOR_MONTHS.forEach(m => { prior12 += byMonth[m] || 0; });
+
+    const gRate = (growthRates[storeKey] || 0) / 100;
+    const proposedRevenue = prior12 > 0 ? prior12 * (1 + gRate) : trailing12;
+    const increment = proposedRevenue - (prior12 || trailing12);
+    if (increment > 0) growingStores++;
+    storeIncrements.push({ storeKey, trailing12, prior12, proposedRevenue, increment: Math.max(0, increment), gRate });
+  });
+
+  // Determine kicker rate based on participation
+  let kickerRate = HOS_INCENTIVE_RATE;
+  if (growingStores >= HOS_KICKER_THRESHOLDS.full) kickerRate = HOS_KICKER_RATES.full;
+  else if (growingStores >= HOS_KICKER_THRESHOLDS.mid) kickerRate = HOS_KICKER_RATES.mid;
+  else kickerRate = HOS_KICKER_RATES.low;
+
+  // Calculate per-store contributions
+  storeIncrements.forEach(si => {
+    const storeIncentive = si.increment * kickerRate;
+    totalIncentive += storeIncentive;
+
+    // Fjord costs: all labor + COGS + share of HoS comp (allocated later)
+    const labor = calcCurrentCosts(si.storeKey, si.proposedRevenue, cogsRate, false);
+
+    results.push({
+      storeKey: si.storeKey,
+      revenue: si.proposedRevenue,
+      actualRevenue: si.trailing12,
+      prior12: si.prior12,
+      gRate: si.gRate,
+      increment: si.increment,
+      storeIncentive,
+      empLabor: labor.empLabor,
+      tempLabor: labor.tempLabor,
+      labor: labor.labor,
+      cogs: labor.cogs,
+      fjordBeforeHoS: labor.fjord,
+    });
+  });
+
+  // Cap incentive
+  const cappedIncentive = Math.min(totalIncentive, HOS_INCENTIVE_CAP);
+  const totalHoSComp = HOS_BASE + cappedIncentive;
+
+  // Allocate HoS cost proportionally by revenue
+  const totalRev = results.reduce((s, r) => s + r.revenue, 0);
+  results.forEach(r => {
+    r.hosAllocation = totalRev > 0 ? totalHoSComp * (r.revenue / totalRev) : totalHoSComp / 6;
+    r.fjordNet = r.fjordBeforeHoS - r.hosAllocation;
+  });
+
+  return {
+    stores: results,
+    growingStores,
+    kickerRate,
+    baseSalary: HOS_BASE,
+    incentive: cappedIncentive,
+    totalComp: totalHoSComp,
+    totalRevenue: totalRev,
+    totalLabor: results.reduce((s, r) => s + r.labor, 0),
+    totalCogs: results.reduce((s, r) => s + r.cogs, 0),
+    totalFjordNet: results.reduce((s, r) => s + r.fjordNet, 0),
+  };
+}
+
+function BoardScenarioComparison({ storeSales }) {
+  const actualRates = useMemo(() => calcActualGrowthRates(storeSales), [storeSales]);
+  const [storeGrowth, setStoreGrowth] = useState({});
+  const [initialized, setInitialized] = useState(false);
+  const [cogsRate, setCogsRate] = useState(0.18);
+  const [opCogsRate, setOpCogsRate] = useState(20);
+
+  useEffect(() => {
+    if (initialized) return;
+    const hasData = Object.values(actualRates).some(r => r !== 0);
+    if (!hasData) return;
+    const defaults = {};
+    STORES.forEach(s => {
+      const actual = Math.round(actualRates[s] * 1000) / 10;
+      defaults[s] = actual < 6 ? 6 : actual;
+    });
+    setStoreGrowth(defaults);
+    setInitialized(true);
+  }, [actualRates, initialized]);
+
+  // Scenario A: Owner-Operator
+  const scenarioA = useMemo(() => {
+    const results = [];
+    STORES.forEach(storeKey => {
+      const sales = storeSales[storeKey] || [];
+      const byMonth = {};
+      sales.forEach(s => {
+        const d = new Date(s.date);
+        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        byMonth[key] = (byMonth[key] || 0) + s.gross;
+      });
+      let trailing12 = 0, prior12 = 0;
+      ANALYSIS_MONTHS.forEach(m => { trailing12 += byMonth[m] || 0; });
+      PRIOR_MONTHS.forEach(m => { prior12 += byMonth[m] || 0; });
+      const gRate = (storeGrowth[storeKey] || 0) / 100;
+      const proposedRevenue = prior12 > 0 ? prior12 * (1 + gRate) : trailing12;
+      const payout = calcProposedPayout(proposedRevenue);
+      let growthBonus = 0;
+      if (gRate > GROWTH_ACCEL_TIERS[0].above) {
+        for (const t of GROWTH_ACCEL_TIERS) {
+          if (gRate <= t.above) continue;
+          growthBonus += proposedRevenue * (Math.min(gRate, t.upTo) - t.above) * t.pct;
+        }
+      }
+      const totalPayout = payout + growthBonus;
+      const propOp = calcProposedOperatorCosts(storeKey, proposedRevenue, opCogsRate / 100);
+      results.push({
+        storeKey, revenue: proposedRevenue, actualRevenue: trailing12, prior12, gRate,
+        payout: totalPayout, growthBonus, fjordNet: proposedRevenue - totalPayout,
+        opCogs: propOp.cogs, opPayroll: propOp.payroll,
+        opTakeHome: totalPayout - propOp.cogs - propOp.payroll,
+      });
+    });
+    const t = { rev: 0, payout: 0, fjord: 0, opTH: 0 };
+    results.forEach(r => { t.rev += r.revenue; t.payout += r.payout; t.fjord += r.fjordNet; t.opTH += r.opTakeHome; });
+    return { stores: results, totals: t };
+  }, [storeSales, storeGrowth, opCogsRate]);
+
+  // Scenario B: Head of Sushi
+  const scenarioB = useMemo(() => calcHeadOfSushiModel(storeSales, storeGrowth, cogsRate), [storeSales, storeGrowth, cogsRate]);
+
+  // Current model baseline
+  const currentTotals = useMemo(() => {
+    let rev = 0, fjord = 0;
+    STORES.forEach(storeKey => {
+      const sales = storeSales[storeKey] || [];
+      const byMonth = {};
+      sales.forEach(s => {
+        const d = new Date(s.date);
+        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        byMonth[key] = (byMonth[key] || 0) + s.gross;
+      });
+      let trailing12 = 0;
+      ANALYSIS_MONTHS.forEach(m => { trailing12 += byMonth[m] || 0; });
+      const cur = calcCurrentCosts(storeKey, trailing12, cogsRate, false);
+      rev += trailing12; fjord += cur.fjord;
+    });
+    return { rev, fjord };
+  }, [storeSales, cogsRate]);
+
+  function exportBoardPdf() {
+    const esc = s => (s || '').replace(/</g, '&lt;');
+    const fmtLocal = v => '$' + Math.round(v).toLocaleString('en-US');
+    const pctLocal = v => (v * 100).toFixed(1) + '%';
+
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title> </title>
+<style>
+@page { size: landscape; margin: 0.5in; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .page-break { page-break-before: always; } }
+body { font-family: Garamond, 'EB Garamond', 'Times New Roman', serif; margin: 0; padding: 0; color: #1B2A4A; }
+.page { padding: 20px 30px; }
+.page-title { font-size: 26pt; color: #1B2A4A; margin: 0 0 6px 0; font-weight: normal; }
+.title-line { height: 2px; background: #1B2A4A; margin-bottom: 18px; }
+.subtitle { font-size: 14pt; color: #1B2A4A; font-weight: bold; margin: 16px 0 8px 0; }
+.summary-box { background: #f7f9fc; border: 1px solid #dde4ed; border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; }
+.summary-box p { margin: 4px 0; font-size: 11pt; line-height: 1.5; }
+.rec { background: #edfaf2; border: 1px solid #9dd4b5; border-radius: 6px; padding: 14px 18px; margin-bottom: 16px; }
+.rec p { margin: 4px 0; font-size: 11pt; line-height: 1.5; }
+.rec-title { font-size: 12pt; font-weight: bold; color: #1a6b3a; margin-bottom: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 11pt; margin-bottom: 14px; }
+th { background: #1B2A4A; color: white; padding: 6px 8px; font-size: 11pt; text-align: center; font-weight: bold; }
+th.left { text-align: left; }
+td { padding: 5px 8px; border: 1px solid #D0D5DD; vertical-align: top; font-size: 11pt; }
+td.right { text-align: right; }
+td.center { text-align: center; }
+td.bold { font-weight: bold; }
+.green { color: #1a6b3a; } .red { color: #b5282a; } .gold { color: #8a6d1b; } .navy { color: #1B2A4A; }
+.total-row td { background: #f7f9fc; font-weight: bold; }
+.note { font-size: 10pt; color: #6b7a99; margin-top: 6px; }
+.assumptions { font-size: 10pt; color: #6b7a99; margin-top: 8px; }
+.assumptions li { margin-bottom: 3px; }
+</style></head><body>`;
+
+    // PAGE 1: Executive Summary & Recommendation
+    html += `<div class="page">`;
+    html += `<div class="page-title">Sushi Program \u2014 Strategic Options Analysis</div><div class="title-line"></div>`;
+
+    // Summary
+    html += `<div class="summary-box">`;
+    html += `<p>This analysis evaluates two strategic alternatives for Fjord Fish Market\u2019s sushi concession program across ${STORES.length} locations. Both models are compared against the current operating baseline using the trailing twelve-month period (April 2025 \u2013 March 2026) and projected forward at assumed growth rates.</p>`;
+    html += `<p><strong>Current baseline:</strong> ${fmtLocal(currentTotals.rev)} annual revenue, ${fmtLocal(currentTotals.fjord)} Fjord net (${pctLocal(currentTotals.fjord / currentTotals.rev)} margin). The existing model blends concession agreements and in-house operations with varying degrees of labor efficiency.</p>`;
+    html += `</div>`;
+
+    // Recommendation
+    const aDelta = scenarioA.totals.fjord - currentTotals.fjord;
+    const bDelta = scenarioB.totalFjordNet - currentTotals.fjord;
+    const preferred = scenarioA.totals.fjord > scenarioB.totalFjordNet ? 'A' : 'B';
+    const prefLabel = preferred === 'A' ? 'Owner-Operator' : 'Head of Sushi';
+    const prefFjord = preferred === 'A' ? scenarioA.totals.fjord : scenarioB.totalFjordNet;
+    const prefDelta = preferred === 'A' ? aDelta : bDelta;
+
+    html += `<div class="rec">`;
+    html += `<div class="rec-title">Recommendation</div>`;
+    if (preferred === 'A') {
+      html += `<p><strong>Scenario A (Owner-Operator)</strong> produces a stronger Fjord net position at ${fmtLocal(prefFjord)} versus ${fmtLocal(scenarioB.totalFjordNet)} under the Head of Sushi model. The owner-operator structure converts fixed labor overhead into variable, performance-linked compensation and eliminates direct employment liability at concession locations.</p>`;
+      html += `<p>However, this model requires recruiting ${STORES.length} qualified operators and cedes day-to-day operational control. The Head of Sushi model (Scenario B) preserves centralized oversight while offering meaningful growth incentives, and may be more appropriate as a transitional step or if qualified operators prove difficult to recruit.</p>`;
+    } else {
+      html += `<p><strong>Scenario B (Head of Sushi)</strong> delivers superior Fjord net revenue at ${fmtLocal(prefFjord)} while maintaining centralized operational control across all ${STORES.length} locations. The participation-based incentive structure ensures company-wide focus rather than single-store optimization.</p>`;
+      html += `<p>Scenario A (Owner-Operator) generates ${fmtLocal(scenarioA.totals.fjord)} in Fjord net but carries execution risk around operator recruitment and quality consistency. The Head of Sushi model provides a more operationally conservative path while still aligning incentives with growth.</p>`;
+    }
+    html += `</div>`;
+
+    // High-level comparison table
+    html += `<div class="subtitle">Financial Overview</div>`;
+    html += `<table><thead><tr><th class="left">Metric</th><th>Current Model</th><th>A: Owner-Operator</th><th>B: Head of Sushi</th></tr></thead><tbody>`;
+    html += `<tr><td class="bold">Total Revenue</td><td class="right">${fmtLocal(currentTotals.rev)}</td><td class="right">${fmtLocal(scenarioA.totals.rev)}</td><td class="right">${fmtLocal(scenarioB.totalRevenue)}</td></tr>`;
+    html += `<tr><td class="bold">Total Labor &amp; Payouts</td><td class="right">${fmtLocal(currentTotals.rev - currentTotals.fjord)}</td><td class="right">${fmtLocal(scenarioA.totals.payout)}</td><td class="right">${fmtLocal(scenarioB.totalLabor + scenarioB.totalCogs + scenarioB.totalComp)}</td></tr>`;
+    html += `<tr><td class="bold">Fjord Net Revenue</td><td class="right bold">${fmtLocal(currentTotals.fjord)}</td><td class="right bold green">${fmtLocal(scenarioA.totals.fjord)}</td><td class="right bold green">${fmtLocal(scenarioB.totalFjordNet)}</td></tr>`;
+    html += `<tr><td class="bold">Fjord Margin</td><td class="right">${pctLocal(currentTotals.fjord / currentTotals.rev)}</td><td class="right">${pctLocal(scenarioA.totals.fjord / scenarioA.totals.rev)}</td><td class="right">${pctLocal(scenarioB.totalFjordNet / scenarioB.totalRevenue)}</td></tr>`;
+    html += `<tr><td class="bold">vs. Current</td><td class="right center">\u2014</td><td class="right ${aDelta >= 0 ? 'green' : 'red'}">${aDelta >= 0 ? '+' : ''}${fmtLocal(aDelta)}</td><td class="right ${bDelta >= 0 ? 'green' : 'red'}">${bDelta >= 0 ? '+' : ''}${fmtLocal(bDelta)}</td></tr>`;
+    html += `</tbody></table>`;
+
+    html += `<div class="assumptions"><strong>Key Assumptions:</strong><ul>`;
+    html += `<li>Analysis period: April 2025 \u2013 March 2026. Growth rates applied to prior-year baseline.</li>`;
+    html += `<li>Owner-Operator: tiered revenue share (62/55/49/43%), growth accelerator (10/18/25%), operator bears COGS (${opCogsRate}%) and staffing.</li>`;
+    html += `<li>Head of Sushi: $${(HOS_BASE/1000).toFixed(0)}k base + ${(HOS_KICKER_RATES.full*100).toFixed(0)}% of per-store incremental revenue (${scenarioB.growingStores}/${STORES.length} stores growing = ${(scenarioB.kickerRate*100).toFixed(0)}% rate). Fjord retains all employees and COGS (${(cogsRate*100).toFixed(0)}%).</li>`;
+    html += `<li>Staffing: $25/hr + 14% burden, $335/day temps. Store hours: 62 hrs/wk.</li>`;
+    html += `</ul></div>`;
+    html += `</div>`;
+
+    // PAGE 2: Store-by-store detail
+    html += `<div class="page page-break">`;
+    html += `<div class="page-title">Store-Level Detail</div><div class="title-line"></div>`;
+
+    // Scenario A table
+    html += `<div class="subtitle">Scenario A: Owner-Operator Model</div>`;
+    html += `<table><thead><tr><th class="left">Store</th><th>Revenue</th><th>YoY Growth</th><th>Operator Payout</th><th>Op COGS</th><th>Op Payroll</th><th>Op Take-Home</th><th>Fjord Net</th></tr></thead><tbody>`;
+    scenarioA.stores.forEach(s => {
+      html += `<tr><td class="bold">${esc(STORE_LABELS[s.storeKey])}</td><td class="right">${fmtLocal(s.revenue)}</td><td class="center">${(s.gRate*100).toFixed(1)}%</td><td class="right">${fmtLocal(s.payout)}</td><td class="right">${fmtLocal(s.opCogs)}</td><td class="right">${fmtLocal(s.opPayroll)}</td><td class="right bold">${fmtLocal(s.opTakeHome)}</td><td class="right bold">${fmtLocal(s.fjordNet)}</td></tr>`;
+    });
+    html += `<tr class="total-row"><td class="bold">Total</td><td class="right">${fmtLocal(scenarioA.totals.rev)}</td><td></td><td class="right">${fmtLocal(scenarioA.totals.payout)}</td><td></td><td></td><td class="right">${fmtLocal(scenarioA.totals.opTH)}</td><td class="right">${fmtLocal(scenarioA.totals.fjord)}</td></tr>`;
+    html += `</tbody></table>`;
+    html += `<p class="note">Operators function as independent owner-operators responsible for their own COGS, staffing, and day-to-day operations. Revenue share is tiered to incentivize hands-on management and penalize absentee operation.</p>`;
+
+    // Scenario B table
+    html += `<div class="subtitle">Scenario B: Head of Sushi Model</div>`;
+    html += `<table><thead><tr><th class="left">Store</th><th>Revenue</th><th>YoY Growth</th><th>Increment</th><th>Labor</th><th>COGS</th><th>HoS Allocation</th><th>Fjord Net</th></tr></thead><tbody>`;
+    scenarioB.stores.forEach(s => {
+      html += `<tr><td class="bold">${esc(STORE_LABELS[s.storeKey])}</td><td class="right">${fmtLocal(s.revenue)}</td><td class="center">${(s.gRate*100).toFixed(1)}%</td><td class="right">${s.increment > 0 ? fmtLocal(s.increment) : '\u2014'}</td><td class="right">${fmtLocal(s.labor)}</td><td class="right">${fmtLocal(s.cogs)}</td><td class="right">${fmtLocal(s.hosAllocation)}</td><td class="right bold">${fmtLocal(s.fjordNet)}</td></tr>`;
+    });
+    html += `<tr class="total-row"><td class="bold">Total</td><td class="right">${fmtLocal(scenarioB.totalRevenue)}</td><td></td><td></td><td class="right">${fmtLocal(scenarioB.totalLabor)}</td><td class="right">${fmtLocal(scenarioB.totalCogs)}</td><td class="right">${fmtLocal(scenarioB.totalComp)}</td><td class="right">${fmtLocal(scenarioB.totalFjordNet)}</td></tr>`;
+    html += `</tbody></table>`;
+    html += `<p class="note">Head of Sushi compensation: ${fmtLocal(scenarioB.baseSalary)} base + ${fmtLocal(scenarioB.incentive)} incentive = <strong>${fmtLocal(scenarioB.totalComp)} total</strong>. Incentive rate: ${(scenarioB.kickerRate*100).toFixed(0)}% (${scenarioB.growingStores} of ${STORES.length} stores growing). All sushi employees remain on Fjord payroll.</p>`;
+
+    // PAGE 3: Qualitative comparison
+    html += `<div class="page page-break">`;
+    html += `<div class="page-title">Strategic Considerations</div><div class="title-line"></div>`;
+
+    html += `<table><thead><tr><th class="left">Dimension</th><th>A: Owner-Operator</th><th>B: Head of Sushi</th></tr></thead><tbody>`;
+    const quals = [
+      ['Operational Control', 'Decentralized \u2014 operators run individual locations autonomously', 'Centralized \u2014 single leader with company-wide oversight and accountability'],
+      ['Growth Incentive', 'Strong \u2014 operator income directly tied to store performance', 'Moderate to strong \u2014 participation kicker rewards broad-based growth across all locations'],
+      ['Quality Consistency', 'Risk of variance across operators', 'Standardized under single leader'],
+      ['Recruitment', 'Must source ' + STORES.length + ' qualified operators', 'Single senior hire with proven leadership track record'],
+      ['Employment Liability', 'Operators are independent \u2014 reduced Fjord exposure', 'All staff remain Fjord employees \u2014 full liability retained'],
+      ['Scalability', 'Each new location requires new operator recruitment', 'Head of Sushi can absorb additional locations within existing structure'],
+      ['Downside Risk', 'Underperforming operator impacts single location', 'Underperforming hire impacts entire program'],
+      ['Fjord Net Impact', fmtLocal(scenarioA.totals.fjord) + ' (' + (aDelta >= 0 ? '+' : '') + fmtLocal(aDelta) + ' vs current)', fmtLocal(scenarioB.totalFjordNet) + ' (' + (bDelta >= 0 ? '+' : '') + fmtLocal(bDelta) + ' vs current)'],
+    ];
+    quals.forEach(([dim, a, b]) => {
+      html += `<tr><td class="bold">${esc(dim)}</td><td>${esc(a)}</td><td>${esc(b)}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    html += `</div>`;
+
+    html += `</body></html>`;
+
+    const printWin = window.open('', '_blank');
+    printWin.document.write(html);
+    printWin.document.close();
+    printWin.onload = () => { printWin.print(); };
+  }
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold" style={{color: NAVY}}>Board Scenario Comparison</h1>
+          <p className="text-sm mt-1" style={{color:'#6b7a99'}}>
+            Side-by-side analysis: Owner-Operator vs Head of Sushi. Adjust growth rates below, then export a board-ready PDF.
+          </p>
+        </div>
+        <button onClick={exportBoardPdf}
+          className="px-4 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0"
+          style={{background: NAVY, border: '1px solid ' + GOLD_ACCENT}}>
+          Export PDF
+        </button>
+      </div>
+
+      {/* Assumptions */}
+      <div className="rounded-xl p-4 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>Growth Assumptions</div>
+        <div className="flex flex-wrap gap-4 items-center">
+          {STORES.map(s => (
+            <div key={s} className="flex items-center gap-1">
+              <span className="text-xs font-medium" style={{color:'#6b7a99'}}>{STORE_LABELS[s]}:</span>
+              <input type="number" min="-20" max="50" step="0.1" value={storeGrowth[s] || 0}
+                onChange={e => setStoreGrowth(prev => ({...prev, [s]: Number(e.target.value)}))}
+                className="w-16 rounded border px-2 py-1 text-xs font-bold text-center"
+                style={{borderColor:'#dde4ed', color: NAVY}} />
+              <span className="text-xs" style={{color:'#6b7a99'}}>%</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-1 ml-4">
+            <span className="text-xs font-medium" style={{color:'#6b7a99'}}>In-house COGS:</span>
+            <input type="number" min="10" max="35" step="1" value={Math.round(cogsRate*100)}
+              onChange={e => setCogsRate(Number(e.target.value)/100)}
+              className="w-14 rounded border px-2 py-1 text-xs font-bold text-center"
+              style={{borderColor:'#dde4ed', color: NAVY}} />
+            <span className="text-xs" style={{color:'#6b7a99'}}>%</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium" style={{color:'#6b7a99'}}>Op COGS:</span>
+            <input type="number" min="10" max="35" step="1" value={opCogsRate}
+              onChange={e => setOpCogsRate(Number(e.target.value))}
+              className="w-14 rounded border px-2 py-1 text-xs font-bold text-center"
+              style={{borderColor:'#dde4ed', color: NAVY}} />
+            <span className="text-xs" style={{color:'#6b7a99'}}>%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="rounded-xl p-4" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Current Fjord Net</div>
+          <div className="text-2xl font-bold" style={{color:'#445566'}}>{fmt(currentTotals.fjord)}</div>
+        </div>
+        <div className="rounded-xl p-4" style={{background:'#fdf8ec', border:'1px solid #e8d38a'}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>A: Owner-Operator</div>
+          <div className="text-2xl font-bold" style={{color: GOLD_ACCENT}}>{fmt(scenarioA.totals.fjord)}</div>
+          <div className="text-xs mt-1" style={{color: aDelta >= 0 ? '#1a6b3a' : '#b5282a'}}>{aDelta >= 0 ? '+' : ''}{fmt(aDelta)} vs current</div>
+        </div>
+        <div className="rounded-xl p-4" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>B: Head of Sushi</div>
+          <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>{fmt(scenarioB.totalFjordNet)}</div>
+          <div className="text-xs mt-1" style={{color: bDelta >= 0 ? '#1a6b3a' : '#b5282a'}}>{bDelta >= 0 ? '+' : ''}{fmt(bDelta)} vs current</div>
+        </div>
+        <div className="rounded-xl p-4" style={{background:'#edfaf2', border:'1px solid #9dd4b5'}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>HoS Total Comp</div>
+          <div className="text-2xl font-bold" style={{color:'#1a6b3a'}}>{fmt(scenarioB.totalComp)}</div>
+          <div className="text-xs mt-1" style={{color:'#6b7a99'}}>{fmt(scenarioB.baseSalary)} base + {fmt(scenarioB.incentive)} incentive</div>
+        </div>
+      </div>
+
+      {/* Side-by-side store tables */}
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
+          <div className="px-4 py-2 text-sm font-bold" style={{background:'#fdf8ec', color: NAVY, borderBottom:'1px solid #e8d38a'}}>Scenario A: Owner-Operator</div>
+          <table className="w-full text-xs">
+            <thead><tr style={{background:'#f7f9fc'}}><th className="text-left px-3 py-2" style={{color:'#6b7a99'}}>Store</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Revenue</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Op Payout</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Op Take-Home</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Fjord Net</th></tr></thead>
+            <tbody>
+              {scenarioA.stores.map(s => (
+                <tr key={s.storeKey} style={{borderBottom:'1px solid #f0f4f8'}}>
+                  <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>{STORE_LABELS[s.storeKey]}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmt(s.revenue)}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#8a5c1a'}}>{fmt(s.payout)}</td>
+                  <td className="px-3 py-2 text-right font-semibold" style={{color: s.opTakeHome >= 70000 ? '#1a6b3a' : '#b5282a'}}>{fmt(s.opTakeHome)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmt(s.fjordNet)}</td>
+                </tr>
+              ))}
+              <tr style={{background:'#f7f9fc', borderTop:'2px solid #dde4ed'}}>
+                <td className="px-3 py-2 font-bold" style={{color: NAVY}}>Total</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color:'#445566'}}>{fmt(scenarioA.totals.rev)}</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color:'#8a5c1a'}}>{fmt(scenarioA.totals.payout)}</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b3a'}}>{fmt(scenarioA.totals.opTH)}</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmt(scenarioA.totals.fjord)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
+          <div className="px-4 py-2 text-sm font-bold" style={{background:'#edf6fb', color: NAVY, borderBottom:'1px solid #b3d9eb'}}>Scenario B: Head of Sushi</div>
+          <table className="w-full text-xs">
+            <thead><tr style={{background:'#f7f9fc'}}><th className="text-left px-3 py-2" style={{color:'#6b7a99'}}>Store</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Revenue</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Labor + COGS</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>HoS Alloc</th><th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Fjord Net</th></tr></thead>
+            <tbody>
+              {scenarioB.stores.map(s => (
+                <tr key={s.storeKey} style={{borderBottom:'1px solid #f0f4f8'}}>
+                  <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>{STORE_LABELS[s.storeKey]}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmt(s.revenue)}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#8a5c1a'}}>{fmt(s.labor + s.cogs)}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#1a6b8a'}}>{fmt(s.hosAllocation)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b8a'}}>{fmt(s.fjordNet)}</td>
+                </tr>
+              ))}
+              <tr style={{background:'#f7f9fc', borderTop:'2px solid #dde4ed'}}>
+                <td className="px-3 py-2 font-bold" style={{color: NAVY}}>Total</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color:'#445566'}}>{fmt(scenarioB.totalRevenue)}</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color:'#8a5c1a'}}>{fmt(scenarioB.totalLabor + scenarioB.totalCogs)}</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b8a'}}>{fmt(scenarioB.totalComp)}</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b8a'}}>{fmt(scenarioB.totalFjordNet)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* HoS comp breakdown */}
+      <div className="rounded-xl p-4 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{color:'#6b7a99'}}>Head of Sushi Compensation Detail</div>
+        <div className="grid grid-cols-5 gap-4 text-xs">
+          <div><span style={{color:'#8899aa'}}>Base Salary</span><br/><strong style={{color: NAVY}}>{fmt(HOS_BASE)}/yr</strong></div>
+          <div><span style={{color:'#8899aa'}}>Stores Growing</span><br/><strong style={{color: NAVY}}>{scenarioB.growingStores} of {STORES.length}</strong></div>
+          <div><span style={{color:'#8899aa'}}>Active Rate</span><br/><strong style={{color: NAVY}}>{(scenarioB.kickerRate*100).toFixed(0)}% of increment</strong></div>
+          <div><span style={{color:'#8899aa'}}>Incentive Earned</span><br/><strong style={{color:'#1a6b3a'}}>{fmt(scenarioB.incentive)}</strong></div>
+          <div><span style={{color:'#8899aa'}}>Total Comp</span><br/><strong style={{color:'#1a6b3a'}}>{fmt(scenarioB.totalComp)}</strong></div>
+        </div>
+        <div className="text-xs mt-2" style={{color:'#8899aa'}}>
+          Incentive rate: {(HOS_KICKER_RATES.full*100)}% if 5+ stores growing, {(HOS_KICKER_RATES.mid*100)}% if 3-4, {(HOS_KICKER_RATES.low*100)}% if fewer. Capped at {fmt(HOS_INCENTIVE_CAP)}/yr. Paid weekly via Modern Treasury ({fmt(scenarioB.totalComp/52)}/wk).
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ROADMAP_DATA = [
   { quarter: 'Q1 2026', color: '#1a6b8a', bg: '#edf6fb', border: '#b3d9eb', sections: [
     { title: 'Culinary', items: [
@@ -2401,7 +2845,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['compare','Model Comparison'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
+        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -2745,6 +3189,11 @@ export default function Dashboard() {
           {/* MODEL COMPARISON */}
           {tab === 'compare' && (
             <ModelComparison storeSales={allSales} />
+          )}
+
+          {/* BOARD SCENARIO COMPARISON */}
+          {tab === 'board' && (
+            <BoardScenarioComparison storeSales={allSales} />
           )}
 
           {/* SCENARIO MODELER */}
