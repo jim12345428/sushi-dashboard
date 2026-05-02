@@ -2126,6 +2126,368 @@ td.bold { font-weight: bold; }
   );
 }
 
+/* ── HEAD OF SUSHI INCOME TAB ── */
+function HoSIncomeTab({ storeSales }) {
+  const actualRates = useMemo(() => calcActualGrowthRates(storeSales), [storeSales]);
+  const [growth, setGrowth] = useState(10);
+  const [cosCobRevenue, setCosCobRevenue] = useState(0);
+  const [cogsRate, setCogsRate] = useState(18);
+  const [initialized, setInitialized] = useState(false);
+
+  // Get actual Cos Cob revenue for default
+  useEffect(() => {
+    if (initialized) return;
+    const sales = storeSales['cos cob'] || [];
+    const byMonth = {};
+    sales.forEach(s => {
+      const d = new Date(s.date);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      byMonth[key] = (byMonth[key] || 0) + s.gross;
+    });
+    let trailing = 0;
+    ANALYSIS_MONTHS.forEach(m => { trailing += byMonth[m] || 0; });
+    if (trailing > 0) {
+      setCosCobRevenue(Math.round(trailing / 10000) * 10000);
+      setInitialized(true);
+    }
+  }, [storeSales, initialized]);
+
+  // Store revenue data for oversight calc
+  const storeData = useMemo(() => {
+    const data = {};
+    STORES.forEach(s => { data[s] = getStoreRevData(storeSales, s); });
+    return data;
+  }, [storeSales]);
+
+  // ── PATH A: Owner-Operator at Cos Cob + Oversight ──
+  const pathA = useMemo(() => {
+    const gRate = growth / 100;
+    const cr = cogsRate / 100;
+
+    // Cos Cob rev share
+    const cobRev = cosCobRevenue * (1 + gRate);
+    const cobPayout = calcProposedPayout(cobRev);
+    let cobGrowthBonus = 0;
+    if (gRate > GROWTH_ACCEL_TIERS[0].above) {
+      for (const t of GROWTH_ACCEL_TIERS) {
+        if (gRate <= t.above) continue;
+        cobGrowthBonus += cobRev * (Math.min(gRate, t.upTo) - t.above) * t.pct;
+      }
+    }
+    const cobTotalPayout = cobPayout + cobGrowthBonus;
+
+    // Cos Cob operator costs
+    const additionalHrs = CREW_SIZE['cos cob'] * STORE_HRS_WEEK - HOS_COB_HRS;
+    const cobCogs = cobRev * cr;
+    const cobPayroll = additionalHrs * 25 * 52 * 1.14;
+    const cobTakeHome = cobTotalPayout - cobCogs - cobPayroll;
+
+    // Oversight incentive on other 5 stores
+    const oversightStores = STORES.filter(s => s !== 'cos cob');
+    let growingCount = 0;
+    let totalIncrement = 0;
+    const storeDetails = [];
+    oversightStores.forEach(storeKey => {
+      const sd = storeData[storeKey];
+      const storeGrowth = gRate; // assume same growth across stores
+      const rev = sd.prior > 0 ? sd.prior * (1 + storeGrowth) : sd.trailing;
+      const increment = Math.max(0, rev - (sd.prior || sd.trailing));
+      if (increment > 0) growingCount++;
+      totalIncrement += increment;
+      storeDetails.push({ storeKey, revenue: rev, increment, trailing: sd.trailing });
+    });
+
+    let kickerRate;
+    if (growingCount >= HOS_KICKER_THRESHOLDS.full) kickerRate = HOS_KICKER_RATES.full;
+    else if (growingCount >= HOS_KICKER_THRESHOLDS.mid) kickerRate = HOS_KICKER_RATES.mid;
+    else kickerRate = HOS_KICKER_RATES.low;
+
+    const oversightIncentive = Math.min(totalIncrement * kickerRate, HOS_INCENTIVE_CAP);
+    const totalComp = cobTakeHome + oversightIncentive;
+
+    return {
+      cobRev, cobTotalPayout, cobPayout, cobGrowthBonus, cobCogs, cobPayroll, cobTakeHome,
+      oversightIncentive, kickerRate, growingCount, totalIncrement,
+      storeDetails, totalComp,
+    };
+  }, [cosCobRevenue, growth, cogsRate, storeData]);
+
+  // ── PATH B: Employee HoS ──
+  const pathB = useMemo(() => {
+    const gRate = growth / 100;
+    let growingCount = 0;
+    let totalIncrement = 0;
+
+    STORES.forEach(storeKey => {
+      const sd = storeData[storeKey];
+      const rev = sd.prior > 0 ? sd.prior * (1 + gRate) : sd.trailing;
+      const increment = Math.max(0, rev - (sd.prior || sd.trailing));
+      if (increment > 0) growingCount++;
+      totalIncrement += increment;
+    });
+
+    let kickerRate;
+    if (growingCount >= HOS_KICKER_THRESHOLDS.full) kickerRate = HOS_KICKER_RATES.full;
+    else if (growingCount >= HOS_KICKER_THRESHOLDS.mid) kickerRate = HOS_KICKER_RATES.mid;
+    else kickerRate = HOS_KICKER_RATES.low;
+
+    const incentive = Math.min(totalIncrement * kickerRate, HOS_INCENTIVE_CAP);
+    const totalComp = HOS_BASE_SALARY + incentive;
+
+    return { base: HOS_BASE_SALARY, incentive, totalComp, kickerRate, growingCount, totalIncrement };
+  }, [growth, storeData]);
+
+  // ── MULTI-YEAR INCOME ──
+  const multiYear = useMemo(() => {
+    const years = [];
+    const gRate = growth / 100;
+    const cr = cogsRate / 100;
+    for (let yr = 1; yr <= 5; yr++) {
+      // Path A
+      const cobRev = cosCobRevenue * Math.pow(1 + gRate, yr);
+      const cobPayout = calcProposedPayout(cobRev);
+      let cobBonus = 0;
+      if (gRate > GROWTH_ACCEL_TIERS[0].above) {
+        for (const t of GROWTH_ACCEL_TIERS) {
+          if (gRate > t.above) cobBonus += cobRev * (Math.min(gRate, t.upTo) - t.above) * t.pct;
+        }
+      }
+      const cobTotal = cobPayout + cobBonus;
+      const cobCogs = cobRev * cr;
+      const cobPayroll = (CREW_SIZE['cos cob'] * STORE_HRS_WEEK - HOS_COB_HRS) * 25 * 52 * 1.14;
+      const cobTH = cobTotal - cobCogs - cobPayroll;
+
+      let oIncrement = 0;
+      STORES.filter(s => s !== 'cos cob').forEach(sk => {
+        const sd = storeData[sk];
+        const curRev = (sd.prior || sd.trailing) * Math.pow(1 + gRate, yr);
+        const prevRev = (sd.prior || sd.trailing) * Math.pow(1 + gRate, yr - 1);
+        oIncrement += Math.max(0, curRev - prevRev);
+      });
+      const oIncentive = Math.min(oIncrement * pathA.kickerRate, HOS_INCENTIVE_CAP);
+      const aTotal = cobTH + oIncentive;
+
+      // Path B
+      let bIncrement = 0;
+      STORES.forEach(sk => {
+        const sd = storeData[sk];
+        const curRev = (sd.prior || sd.trailing) * Math.pow(1 + gRate, yr);
+        const prevRev = (sd.prior || sd.trailing) * Math.pow(1 + gRate, yr - 1);
+        bIncrement += Math.max(0, curRev - prevRev);
+      });
+      const bIncentive = Math.min(bIncrement * pathB.kickerRate, HOS_INCENTIVE_CAP);
+      const bTotal = HOS_BASE_SALARY + bIncentive;
+
+      years.push({ year: yr, aTotal, bTotal, cobRev, cobTH, oIncentive, bIncentive });
+    }
+    return years;
+  }, [cosCobRevenue, growth, cogsRate, storeData, pathA.kickerRate, pathB.kickerRate]);
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold" style={{color: NAVY}}>Head of Sushi — Income Potential</h1>
+        <p className="text-sm mt-2" style={{color:'#6b7a99'}}>
+          Two compensation paths for the Head of Sushi role. Both include 65% operational time at the Cos Cob flagship and 35% oversight across all locations.
+        </p>
+      </div>
+
+      {/* Hero comparison */}
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="rounded-xl p-6 text-center" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+          <div className="text-xs uppercase tracking-widest mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Path A: Owner-Operator</div>
+          <div className="text-4xl font-bold mb-2" style={{color: GOLD_ACCENT}}>{fmt(pathA.totalComp)}</div>
+          <div className="flex justify-center gap-6 text-sm" style={{color:'rgba(255,255,255,0.5)'}}>
+            <span>{fmt(pathA.totalComp / 12)}/mo</span>
+            <span>{fmt(pathA.totalComp / 52)}/wk</span>
+          </div>
+          <div className="text-xs mt-2" style={{color:'rgba(255,255,255,0.3)'}}>Cos Cob rev share + oversight incentive</div>
+        </div>
+        <div className="rounded-xl p-6 text-center" style={{background: NAVY, border:'2px solid #4a9aba'}}>
+          <div className="text-xs uppercase tracking-widest mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Path B: Employee</div>
+          <div className="text-4xl font-bold mb-2" style={{color:'#6ab8d6'}}>{fmt(pathB.totalComp)}</div>
+          <div className="flex justify-center gap-6 text-sm" style={{color:'rgba(255,255,255,0.5)'}}>
+            <span>{fmt(pathB.totalComp / 12)}/mo</span>
+            <span>{fmt(pathB.totalComp / 52)}/wk</span>
+          </div>
+          <div className="text-xs mt-2" style={{color:'rgba(255,255,255,0.3)'}}>$80k base + growth incentive</div>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="rounded-xl p-5 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>Adjust Assumptions</div>
+        <div className="grid grid-cols-3 gap-6">
+          <div>
+            <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Cos Cob Annual Revenue</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min="200000" max="800000" step="10000" value={cosCobRevenue}
+                onChange={e => setCosCobRevenue(Number(e.target.value))} className="flex-1" />
+              <span className="text-sm font-bold w-20 text-right" style={{color: NAVY}}>{fmt(cosCobRevenue)}</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>YoY Growth (all stores)</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min="0" max="25" step="1" value={growth}
+                onChange={e => setGrowth(Number(e.target.value))} className="flex-1" />
+              <span className="text-sm font-bold w-12 text-right" style={{color: growth > 5 ? '#1a6b3a' : NAVY}}>+{growth}%</span>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>COGS % (Path A only)</label>
+            <div className="flex items-center gap-2">
+              <input type="range" min="15" max="30" step="1" value={cogsRate}
+                onChange={e => setCogsRate(Number(e.target.value))} className="flex-1" />
+              <span className="text-sm font-bold w-12 text-right" style={{color: NAVY}}>{cogsRate}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Path A Breakdown */}
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="rounded-xl overflow-hidden" style={{border:'1px solid #e8d38a', background:'white'}}>
+          <div className="px-4 py-3 text-sm font-bold" style={{background:'#fdf8ec', color: NAVY, borderBottom:'1px solid #e8d38a'}}>Path A: Owner-Operator Breakdown</div>
+          <div className="p-4 space-y-3 text-xs">
+            <div className="flex justify-between pb-2" style={{borderBottom:'1px solid #f0f4f8'}}>
+              <span style={{color:'#6b7a99'}}>Cos Cob Revenue (projected)</span>
+              <strong style={{color: NAVY}}>{fmt(pathA.cobRev)}</strong>
+            </div>
+            <div className="flex justify-between" style={{color:'#6b7a99'}}>
+              <span className="ml-3">Base rev share</span><span style={{color: NAVY}}>{fmt(pathA.cobPayout)}</span>
+            </div>
+            {pathA.cobGrowthBonus > 0 && <div className="flex justify-between" style={{color:'#6b7a99'}}>
+              <span className="ml-3">Growth accelerator</span><span style={{color:'#1a6b3a'}}>+{fmt(pathA.cobGrowthBonus)}</span>
+            </div>}
+            <div className="flex justify-between font-semibold" style={{color: NAVY, borderBottom:'1px solid #f0f4f8', paddingBottom:8}}>
+              <span>Total Fjord payout</span><span>{fmt(pathA.cobTotalPayout)}</span>
+            </div>
+            <div className="flex justify-between" style={{color:'#b5282a'}}>
+              <span className="ml-3">Less: COGS ({cogsRate}%)</span><span>({fmt(pathA.cobCogs)})</span>
+            </div>
+            <div className="flex justify-between" style={{color:'#b5282a'}}>
+              <span className="ml-3">Less: staffing ({(CREW_SIZE['cos cob'] * STORE_HRS_WEEK - HOS_COB_HRS).toFixed(1)} hrs/wk)</span><span>({fmt(pathA.cobPayroll)})</span>
+            </div>
+            <div className="flex justify-between font-bold pt-2" style={{borderTop:'2px solid #e8d38a', color: NAVY}}>
+              <span>Cos Cob take-home</span><span>{fmt(pathA.cobTakeHome)}</span>
+            </div>
+            <div className="flex justify-between pt-2" style={{borderTop:'1px solid #f0f4f8', color:'#1a6b3a'}}>
+              <span>Oversight incentive ({(pathA.kickerRate*100).toFixed(0)}% × {pathA.growingCount}/5 stores)</span>
+              <strong>+{fmt(pathA.oversightIncentive)}</strong>
+            </div>
+            <div className="flex justify-between font-bold text-base pt-2" style={{borderTop:'2px solid #e8d38a', color: GOLD_ACCENT}}>
+              <span>Total Compensation</span><span>{fmt(pathA.totalComp)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl overflow-hidden" style={{border:'1px solid #b3d9eb', background:'white'}}>
+          <div className="px-4 py-3 text-sm font-bold" style={{background:'#edf6fb', color: NAVY, borderBottom:'1px solid #b3d9eb'}}>Path B: Employee Breakdown</div>
+          <div className="p-4 space-y-3 text-xs">
+            <div className="flex justify-between pb-2" style={{borderBottom:'1px solid #f0f4f8'}}>
+              <span style={{color:'#6b7a99'}}>Base Salary</span>
+              <strong style={{color: NAVY}}>{fmt(pathB.base)}</strong>
+            </div>
+            <div className="flex justify-between" style={{color:'#6b7a99'}}>
+              <span className="ml-3">Weekly base</span><span style={{color: NAVY}}>{fmt(pathB.base / 52)}/wk</span>
+            </div>
+            <div className="flex justify-between pt-2" style={{borderTop:'1px solid #f0f4f8', color:'#6b7a99'}}>
+              <span>Incremental revenue (all {STORES.length} stores)</span>
+              <span style={{color: NAVY}}>{fmt(pathB.totalIncrement)}</span>
+            </div>
+            <div className="flex justify-between" style={{color:'#6b7a99'}}>
+              <span className="ml-3">Stores growing</span><span style={{color: NAVY}}>{pathB.growingCount} of {STORES.length}</span>
+            </div>
+            <div className="flex justify-between" style={{color:'#6b7a99'}}>
+              <span className="ml-3">Kicker rate</span><span style={{color: NAVY}}>{(pathB.kickerRate*100).toFixed(0)}%</span>
+            </div>
+            <div className="flex justify-between pt-2 font-semibold" style={{borderTop:'1px solid #f0f4f8', color:'#1a6b3a'}}>
+              <span>Incentive earned</span><span>+{fmt(pathB.incentive)}</span>
+            </div>
+            <div className="text-xs" style={{color:'#8899aa'}}>Capped at {fmt(HOS_INCENTIVE_CAP)}/yr</div>
+            <div className="flex justify-between font-bold text-base pt-2" style={{borderTop:'2px solid #b3d9eb', color:'#1a6b8a'}}>
+              <span>Total Compensation</span><span>{fmt(pathB.totalComp)}</span>
+            </div>
+            <div className="mt-2 p-3 rounded-lg text-xs" style={{background:'#f7f9fc', color:'#6b7a99'}}>
+              No COGS or staffing risk. Fjord covers all operational costs. Stable base with upside tied to performance.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5-Year Income Projection */}
+      <div className="rounded-xl overflow-hidden mb-6" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <div className="px-4 py-3 text-sm font-bold" style={{background:'#f7f9fc', color: NAVY, borderBottom:'1px solid #dde4ed'}}>5-Year Income Projection at {growth}% Growth</div>
+        <table className="w-full text-xs">
+          <thead><tr style={{background:'#f7f9fc'}}>
+            <th className="text-left px-3 py-2" style={{color:'#6b7a99'}}>Year</th>
+            <th className="text-right px-3 py-2" style={{color: GOLD_ACCENT}}>Path A: Total</th>
+            <th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Cos Cob Take-Home</th>
+            <th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Oversight</th>
+            <th className="text-right px-3 py-2" style={{color:'#1a6b8a'}}>Path B: Total</th>
+            <th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Base</th>
+            <th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>Incentive</th>
+            <th className="text-right px-3 py-2" style={{color:'#6b7a99'}}>A vs B</th>
+          </tr></thead>
+          <tbody>
+            {multiYear.map(y => {
+              const diff = y.aTotal - y.bTotal;
+              return (
+                <tr key={y.year} style={{borderBottom:'1px solid #f0f4f8'}}>
+                  <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>Year {y.year}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmt(y.aTotal)}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmt(y.cobTH)}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#1a6b3a'}}>{fmt(y.oIncentive)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b8a'}}>{fmt(y.bTotal)}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmt(HOS_BASE_SALARY)}</td>
+                  <td className="px-3 py-2 text-right" style={{color:'#1a6b3a'}}>{fmt(y.bIncentive)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color: diff >= 0 ? '#1a6b3a' : '#b5282a'}}>{diff >= 0 ? '+' : ''}{fmt(diff)}</td>
+                </tr>
+              );
+            })}
+            <tr style={{background:'#f7f9fc', borderTop:'2px solid #dde4ed'}}>
+              <td className="px-3 py-2 font-bold" style={{color: NAVY}}>5-Yr Total</td>
+              <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmt(multiYear.reduce((s,y)=>s+y.aTotal,0))}</td>
+              <td></td><td></td>
+              <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b8a'}}>{fmt(multiYear.reduce((s,y)=>s+y.bTotal,0))}</td>
+              <td></td><td></td>
+              <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b3a'}}>+{fmt(multiYear.reduce((s,y)=>s+y.aTotal,0) - multiYear.reduce((s,y)=>s+y.bTotal,0))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* What makes Path A different */}
+      <div className="rounded-xl p-5" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <div className="text-sm font-bold mb-3" style={{color: NAVY}}>Why Two Paths?</div>
+        <div className="grid grid-cols-2 gap-6 text-xs" style={{color:'#445566'}}>
+          <div>
+            <div className="font-semibold mb-1" style={{color: GOLD_ACCENT}}>Path A: Owner-Operator</div>
+            <ul className="space-y-1 ml-3" style={{listStyleType:'disc'}}>
+              <li>Higher upside — income grows with revenue</li>
+              <li>You run Cos Cob as your own business</li>
+              <li>COGS discipline directly increases your take-home</li>
+              <li>Oversight incentive rewards company-wide impact</li>
+              <li>More risk — you cover staffing and ingredients</li>
+            </ul>
+          </div>
+          <div>
+            <div className="font-semibold mb-1" style={{color:'#1a6b8a'}}>Path B: Employee</div>
+            <ul className="space-y-1 ml-3" style={{listStyleType:'disc'}}>
+              <li>Stable $80k base — guaranteed floor</li>
+              <li>Growth incentive adds up to $70k/yr upside</li>
+              <li>No personal financial risk on operations</li>
+              <li>Fjord covers all COGS and staffing costs</li>
+              <li>Focus purely on management and growth</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ROADMAP_DATA = [
   { quarter: 'Q1 2026', color: '#1a6b8a', bg: '#edf6fb', border: '#b3d9eb', sections: [
     { title: 'Culinary', items: [
@@ -3001,7 +3363,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
+        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['hos','HoS Income'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -3013,7 +3375,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {!['modeler','overview','recruit','income','compare','board','roadmap'].includes(tab) && (
+        {!['modeler','overview','recruit','income','hos','compare','board','roadmap'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -3537,6 +3899,10 @@ export default function Dashboard() {
           {/* INCOME CALCULATOR */}
           {tab === 'income' && (
             <IncomeCalculator />
+          )}
+
+          {tab === 'hos' && (
+            <HoSIncomeTab storeSales={allSales} />
           )}
 
           {/* ROADMAP */}
