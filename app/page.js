@@ -1527,10 +1527,21 @@ function ModelComparison({ storeSales }) {
 
 /* ── ROADMAP ── */
 /* ── BOARD SCENARIO COMPARISON ── */
-const HOS_BASE_SALARY = 80000;
-const HOS_INCENTIVE_CAP = 70000;
+const HOS_BASE_SALARY = 100000;
+const HOS_INCENTIVE_CAP = 50000;
+const HOS_GROWTH_CAP = 30000;  // 60% of incentive from growth
+const HOS_MARGIN_CAP = 20000;  // 40% of incentive from margin
 const HOS_KICKER_THRESHOLDS = { full: 5, mid: 3 };
 const HOS_KICKER_RATES = { full: 0.25, mid: 0.18, low: 0.12 };
+const HOS_MARGIN_TARGETS = { excellent: 0.18, good: 0.20, fair: 0.22 }; // COGS thresholds
+const HOS_MARGIN_PAYOUTS = { excellent: 1.0, good: 0.6, fair: 0.25, miss: 0 }; // % of margin cap
+
+function calcMarginBonus(cogsRate) {
+  if (cogsRate <= HOS_MARGIN_TARGETS.excellent) return HOS_MARGIN_CAP * HOS_MARGIN_PAYOUTS.excellent;
+  if (cogsRate <= HOS_MARGIN_TARGETS.good) return HOS_MARGIN_CAP * HOS_MARGIN_PAYOUTS.good;
+  if (cogsRate <= HOS_MARGIN_TARGETS.fair) return HOS_MARGIN_CAP * HOS_MARGIN_PAYOUTS.fair;
+  return 0;
+}
 const HOS_COB_PCT = 0.65;
 const HOS_TOTAL_HRS = 50;
 const HOS_COB_HRS = HOS_TOTAL_HRS * HOS_COB_PCT; // 32.5 hrs/wk in Cos Cob
@@ -1661,7 +1672,7 @@ function BoardScenarioComparison({ storeSales }) {
 
     const oversightIncentive = Math.min(
       oversightIncrements.reduce((s, si) => s + si.increment * kickerRate, 0),
-      HOS_INCENTIVE_CAP
+      HOS_GROWTH_CAP
     );
 
     const hosCosCob = stores.find(s => s.storeKey === 'cos cob');
@@ -1699,7 +1710,9 @@ function BoardScenarioComparison({ storeSales }) {
     else if (growingCount >= HOS_KICKER_THRESHOLDS.mid) kickerRate = HOS_KICKER_RATES.mid;
     else kickerRate = HOS_KICKER_RATES.low;
 
-    const incentive = Math.min(increments.reduce((s, inc) => s + inc * kickerRate, 0), HOS_INCENTIVE_CAP);
+    const growthIncentive = Math.min(increments.reduce((s, inc) => s + inc * kickerRate, 0), HOS_GROWTH_CAP);
+    const marginBonus = calcMarginBonus(cr);
+    const incentive = growthIncentive + marginBonus;
     const hosComp = HOS_BASE_SALARY + incentive;
 
     const totalRev = stores.reduce((s, r) => s + r.revenue, 0);
@@ -1715,7 +1728,7 @@ function BoardScenarioComparison({ storeSales }) {
       fjord: stores.reduce((s, r) => s + r.fjordNet, 0),
     };
 
-    return { stores, totals, growingCount, kickerRate, incentive, hosComp, hosSalary: HOS_BASE_SALARY };
+    return { stores, totals, growingCount, kickerRate, growthIncentive, marginBonus, incentive, hosComp, hosSalary: HOS_BASE_SALARY };
   }, [storeData, growthB, cogsB]);
 
   const aDelta = scenarioA.totals.fjord - baseline.totals.fjord;
@@ -1757,7 +1770,7 @@ function BoardScenarioComparison({ storeSales }) {
       });
 
       // Scenario A: oversight incentive scales with growth
-      const aOversight = yr === 0 ? 0 : Math.min(aOversightBase * scenarioA.kickerRate, HOS_INCENTIVE_CAP);
+      const aOversight = yr === 0 ? 0 : Math.min(aOversightBase * scenarioA.kickerRate, HOS_GROWTH_CAP);
       aFjord -= aOversight;
 
       // Scenario B: HoS comp
@@ -2114,9 +2127,10 @@ td.bold { font-weight: bold; }
         </div>
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #b3d9eb'}}>
           <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{color:'#1a6b8a'}}>HoS Comp — Scenario B (Employee)</div>
-          <div className="grid grid-cols-3 gap-3 text-xs">
+          <div className="grid grid-cols-4 gap-3 text-xs">
             <div><span style={{color:'#8899aa'}}>Base Salary</span><br/><strong style={{color: NAVY}}>{fmt(HOS_BASE_SALARY)}</strong></div>
-            <div><span style={{color:'#8899aa'}}>Incentive</span><br/><strong style={{color:'#1a6b3a'}}>{fmt(scenarioB.incentive)}</strong></div>
+            <div><span style={{color:'#8899aa'}}>Growth Bonus</span><br/><strong style={{color:'#1a6b3a'}}>{fmt(scenarioB.growthIncentive)}</strong></div>
+            <div><span style={{color:'#8899aa'}}>Margin Bonus</span><br/><strong style={{color:'#1a6b3a'}}>{fmt(scenarioB.marginBonus)}</strong></div>
             <div><span style={{color:'#8899aa'}}>Total Comp</span><br/><strong style={{color:'#1a6b8a'}}>{fmt(scenarioB.hosComp)}</strong></div>
           </div>
           <div className="text-xs mt-2" style={{color:'#8899aa'}}>${(HOS_BASE_SALARY/1000).toFixed(0)}k base + {(scenarioB.kickerRate*100).toFixed(0)}% of incremental revenue ({scenarioB.growingCount}/{STORES.length} growing). Cap: {fmt(HOS_INCENTIVE_CAP)}/yr. Weekly: {fmt(scenarioB.hosComp/52)}.</div>
@@ -2202,7 +2216,7 @@ function HoSIncomeTab({ storeSales }) {
     else if (growingCount >= HOS_KICKER_THRESHOLDS.mid) kickerRate = HOS_KICKER_RATES.mid;
     else kickerRate = HOS_KICKER_RATES.low;
 
-    const oversightIncentive = Math.min(totalIncrement * kickerRate, HOS_INCENTIVE_CAP);
+    const oversightIncentive = Math.min(totalIncrement * kickerRate, HOS_GROWTH_CAP);
     const totalComp = cobTakeHome + oversightIncentive;
 
     return {
@@ -2231,11 +2245,13 @@ function HoSIncomeTab({ storeSales }) {
     else if (growingCount >= HOS_KICKER_THRESHOLDS.mid) kickerRate = HOS_KICKER_RATES.mid;
     else kickerRate = HOS_KICKER_RATES.low;
 
-    const incentive = Math.min(totalIncrement * kickerRate, HOS_INCENTIVE_CAP);
+    const growthIncentive = Math.min(totalIncrement * kickerRate, HOS_GROWTH_CAP);
+    const marginBonus = calcMarginBonus(cogsRate / 100);
+    const incentive = growthIncentive + marginBonus;
     const totalComp = HOS_BASE_SALARY + incentive;
 
-    return { base: HOS_BASE_SALARY, incentive, totalComp, kickerRate, growingCount, totalIncrement };
-  }, [growth, storeData]);
+    return { base: HOS_BASE_SALARY, growthIncentive, marginBonus, incentive, totalComp, kickerRate, growingCount, totalIncrement };
+  }, [growth, cogsRate, storeData]);
 
   // ── MULTI-YEAR INCOME ──
   const multiYear = useMemo(() => {
@@ -2264,7 +2280,7 @@ function HoSIncomeTab({ storeSales }) {
         const prevRev = (sd.prior || sd.trailing) * Math.pow(1 + gRate, yr - 1);
         oIncrement += Math.max(0, curRev - prevRev);
       });
-      const oIncentive = Math.min(oIncrement * pathA.kickerRate, HOS_INCENTIVE_CAP);
+      const oIncentive = Math.min(oIncrement * pathA.kickerRate, HOS_GROWTH_CAP);
       const aTotal = cobTH + oIncentive;
 
       // Path B
@@ -2275,7 +2291,9 @@ function HoSIncomeTab({ storeSales }) {
         const prevRev = (sd.prior || sd.trailing) * Math.pow(1 + gRate, yr - 1);
         bIncrement += Math.max(0, curRev - prevRev);
       });
-      const bIncentive = Math.min(bIncrement * pathB.kickerRate, HOS_INCENTIVE_CAP);
+      const bGrowthInc = Math.min(bIncrement * pathB.kickerRate, HOS_GROWTH_CAP);
+      const bMarginInc = calcMarginBonus(cogsRate / 100);
+      const bIncentive = bGrowthInc + bMarginInc;
       const bTotal = HOS_BASE_SALARY + bIncentive;
 
       years.push({ year: yr, aTotal, bTotal, cobRev, cobTH, oIncentive, bIncentive });
@@ -2310,7 +2328,7 @@ function HoSIncomeTab({ storeSales }) {
             <span>{fmt(pathB.totalComp / 12)}/mo</span>
             <span>{fmt(pathB.totalComp / 52)}/wk</span>
           </div>
-          <div className="text-xs mt-2" style={{color:'rgba(255,255,255,0.3)'}}>$80k base + growth incentive</div>
+          <div className="text-xs mt-2" style={{color:'rgba(255,255,255,0.3)'}}>$100k base + growth &amp; margin incentive</div>
         </div>
       </div>
 
@@ -2392,25 +2410,31 @@ function HoSIncomeTab({ storeSales }) {
             <div className="flex justify-between" style={{color:'#6b7a99'}}>
               <span className="ml-3">Weekly base</span><span style={{color: NAVY}}>{fmt(pathB.base / 52)}/wk</span>
             </div>
-            <div className="flex justify-between pt-2" style={{borderTop:'1px solid #f0f4f8', color:'#6b7a99'}}>
-              <span>Incremental revenue (all {STORES.length} stores)</span>
+            <div className="flex justify-between pt-2 font-semibold" style={{borderTop:'1px solid #f0f4f8', color:'#6b7a99'}}>
+              <span>Growth Bonus</span>
+              <span style={{color:'#1a6b3a'}}>+{fmt(pathB.growthIncentive)}</span>
+            </div>
+            <div className="flex justify-between" style={{color:'#6b7a99'}}>
+              <span className="ml-3">Incremental revenue ({STORES.length} stores)</span>
               <span style={{color: NAVY}}>{fmt(pathB.totalIncrement)}</span>
             </div>
             <div className="flex justify-between" style={{color:'#6b7a99'}}>
-              <span className="ml-3">Stores growing</span><span style={{color: NAVY}}>{pathB.growingCount} of {STORES.length}</span>
+              <span className="ml-3">{pathB.growingCount}/{STORES.length} growing at {(pathB.kickerRate*100).toFixed(0)}% rate</span>
+              <span className="text-xs" style={{color:'#8899aa'}}>cap {fmt(HOS_GROWTH_CAP)}</span>
+            </div>
+            <div className="flex justify-between pt-2 font-semibold" style={{borderTop:'1px solid #f0f4f8', color:'#6b7a99'}}>
+              <span>Margin Bonus</span>
+              <span style={{color:'#1a6b3a'}}>+{fmt(pathB.marginBonus)}</span>
             </div>
             <div className="flex justify-between" style={{color:'#6b7a99'}}>
-              <span className="ml-3">Kicker rate</span><span style={{color: NAVY}}>{(pathB.kickerRate*100).toFixed(0)}%</span>
+              <span className="ml-3">COGS at {cogsRate}%: {cogsRate <= 18 ? 'Excellent' : cogsRate <= 20 ? 'Good' : cogsRate <= 22 ? 'Fair' : 'Miss'}</span>
+              <span className="text-xs" style={{color:'#8899aa'}}>cap {fmt(HOS_MARGIN_CAP)}</span>
             </div>
-            <div className="flex justify-between pt-2 font-semibold" style={{borderTop:'1px solid #f0f4f8', color:'#1a6b3a'}}>
-              <span>Incentive earned</span><span>+{fmt(pathB.incentive)}</span>
-            </div>
-            <div className="text-xs" style={{color:'#8899aa'}}>Capped at {fmt(HOS_INCENTIVE_CAP)}/yr</div>
             <div className="flex justify-between font-bold text-base pt-2" style={{borderTop:'2px solid #b3d9eb', color:'#1a6b8a'}}>
               <span>Total Compensation</span><span>{fmt(pathB.totalComp)}</span>
             </div>
             <div className="mt-2 p-3 rounded-lg text-xs" style={{background:'#f7f9fc', color:'#6b7a99'}}>
-              No COGS or staffing risk. Fjord covers all operational costs. Stable base with upside tied to performance.
+              No COGS or staffing risk. Fjord covers all operational costs. Responsible for building and managing a sushi chef network, coordinating daily transportation from Flushing/Queens, and integrating the sushi program into Fjord&apos;s training and development system.
             </div>
           </div>
         </div>
@@ -2475,11 +2499,13 @@ function HoSIncomeTab({ storeSales }) {
           <div>
             <div className="font-semibold mb-1" style={{color:'#1a6b8a'}}>Path B: Employee</div>
             <ul className="space-y-1 ml-3" style={{listStyleType:'disc'}}>
-              <li>Stable $80k base — guaranteed floor</li>
-              <li>Growth incentive adds up to $70k/yr upside</li>
+              <li>Stable $100k base — guaranteed floor</li>
+              <li>Up to $50k bonus from growth ($30k) + margin ($20k)</li>
               <li>No personal financial risk on operations</li>
               <li>Fjord covers all COGS and staffing costs</li>
-              <li>Focus purely on management and growth</li>
+              <li>Build and manage chef network from Flushing/Queens</li>
+              <li>Coordinate daily van transportation for staff</li>
+              <li>Set up sushi program in Fjord T&amp;D system</li>
             </ul>
           </div>
         </div>
