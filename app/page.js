@@ -2145,7 +2145,7 @@ td.bold { font-weight: bold; }
 const DEBT_ENTITIES = ['Fish Island', '5th Ave BK', 'NEF'];
 const DEBT_SEED = [
   { id: 'd1', lender: '2500HD Van', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 995, notes: '', docFile: '' },
-  { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Island', cleanup: false, originalAmount: 800000, originationDate: '2025-10-21', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 350000, notes: 'FULLY CONVERTED to 16% Class B Membership Interest on 1/5/2026 per Note Conversion Agreement. Notes cancelled — BS balance of $350K should be $0; $450K reclass to equity needed.', docFile: '' },
+  { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Island', cleanup: false, active: false, originalAmount: 800000, originationDate: '2025-10-21', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 350000, notes: 'FULLY CONVERTED to 16% Class B Membership Interest on 1/5/2026 per Note Conversion Agreement. Notes cancelled — BS balance of $350K should be $0; $450K reclass to equity needed.', docFile: '' },
   { id: 'd3', lender: 'Kabbage Loan (Amex) / American Express Loan', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 32567, notes: '', docFile: '' },
   { id: 'd4', lender: 'WRB Real Estate Group LLC', entity: 'Fish Island', cleanup: false, originalAmount: 300000, originationDate: '2025-12-10', maturityDate: '2026-01-04', interestRate: 0.12, termMonths: null, monthlyPayment: 3000, balance: 300000, notes: 'Debtor: Fish Island LLC. Lender: WRB Real Estate Group LLC. Subordinated; secured by guarantees from Fish Co Mgmt, Northeast Fish Co, 5th Ave Brooklyn, and James Thistle. Interest-only monthly starting 11/1/2025; principal+accrued due on demand from 1/4/2026.', docFile: '' },
   { id: 'd5', lender: 'Newtek Bank SBA Loan #2742643', entity: 'Fish Island', cleanup: false, originalAmount: 2250000, originationDate: '2025-04-10', maturityDate: '2035-04-02', interestRate: null, termMonths: 120, monthlyPayment: null, balance: 2506990, notes: 'SBA loan. Borrowers: Fish Island LLC + 5th Ave Brooklyn LLC (joint & several). Guarantors: Northeast Fish Co (unlimited), Fish Co Mgmt (unlimited), Fish Acquisition Partners (unlimited), Sea Company (unlimited), James Thistle (unlimited), Dana Thistle (limited). Newtek Bank depository required for ACH. NOTE: BS balance $2,510,447 exceeds original $2,250,000 — likely includes accrued interest, fees, or this is a separate facility.', docFile: '' },
@@ -2164,12 +2164,20 @@ const DEBT_SEED = [
 
 function DebtScheduleTab() {
   const [debts, setDebts] = useState(() => {
-    if (typeof window === 'undefined') return DEBT_SEED;
-    try { const v = localStorage.getItem('debt_schedule'); return v ? JSON.parse(v) : DEBT_SEED; } catch { return DEBT_SEED; }
+    const seed = DEBT_SEED.map(d => ({ active: d.active !== false, ...d, active: d.active !== false }));
+    if (typeof window === 'undefined') return seed;
+    try {
+      const v = localStorage.getItem('debt_schedule');
+      if (!v) return seed;
+      const parsed = JSON.parse(v);
+      // Migrate legacy records: missing `active` → default true
+      return parsed.map(d => ({ ...d, active: d.active === undefined ? true : d.active }));
+    } catch { return seed; }
   });
   const [selected, setSelected] = useState(null);
   const [filterEntity, setFilterEntity] = useState('All');
   const [showCleanupOnly, setShowCleanupOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('Active'); // Active | Inactive | All
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -2180,15 +2188,19 @@ function DebtScheduleTab() {
     return debts.filter(d => {
       if (filterEntity !== 'All' && d.entity !== filterEntity) return false;
       if (showCleanupOnly && !d.cleanup) return false;
+      if (statusFilter === 'Active' && !d.active) return false;
+      if (statusFilter === 'Inactive' && d.active) return false;
       return true;
     });
-  }, [debts, filterEntity, showCleanupOnly]);
+  }, [debts, filterEntity, showCleanupOnly, statusFilter]);
 
+  // Totals only include ACTIVE debts (regardless of current filter view)
   const totals = useMemo(() => {
     const byEntity = {};
     DEBT_ENTITIES.forEach(e => { byEntity[e] = 0; });
     let grand = 0;
     debts.forEach(d => {
+      if (!d.active) return;
       byEntity[d.entity] = (byEntity[d.entity] || 0) + (d.balance || 0);
       grand += d.balance || 0;
     });
@@ -2216,7 +2228,7 @@ function DebtScheduleTab() {
   function addNewDebt() {
     const newDebt = {
       id: 'd' + Date.now(),
-      lender: '', entity: 'Fish Island', cleanup: false,
+      lender: '', entity: 'Fish Island', cleanup: false, active: true,
       originalAmount: null, originationDate: '', maturityDate: '',
       interestRate: null, termMonths: null, monthlyPayment: null,
       balance: 0, notes: '', docFile: '',
@@ -2258,7 +2270,13 @@ function DebtScheduleTab() {
 
       {/* Filters */}
       <div className="rounded-xl p-3 mb-4 flex items-center gap-3" style={{background:'white', border:'1px solid #dde4ed'}}>
-        <span className="text-xs font-semibold" style={{color:'#6b7a99'}}>Entity:</span>
+        <span className="text-xs font-semibold" style={{color:'#6b7a99'}}>Status:</span>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
+          <option value="Active">Active only</option>
+          <option value="Inactive">Inactive only</option>
+          <option value="All">All</option>
+        </select>
+        <span className="text-xs font-semibold ml-3" style={{color:'#6b7a99'}}>Entity:</span>
         <select value={filterEntity} onChange={e => setFilterEntity(e.target.value)} className="text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
           <option value="All">All</option>
           {DEBT_ENTITIES.map(e => <option key={e} value={e}>{e}</option>)}
@@ -2267,13 +2285,16 @@ function DebtScheduleTab() {
           <input type="checkbox" checked={showCleanupOnly} onChange={e => setShowCleanupOnly(e.target.checked)} />
           Show cleanup-flagged only
         </label>
-        <span className="text-xs ml-auto" style={{color:'#8899aa'}}>{filtered.length} of {debts.length}</span>
+        <span className="text-xs ml-auto" style={{color:'#8899aa'}}>
+          {filtered.length} of {debts.length} <span style={{color:'#cbd5e0'}}>·</span> {debts.filter(d => d.active).length} active, {debts.filter(d => !d.active).length} inactive
+        </span>
       </div>
 
       {/* Table */}
       <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
         <table className="w-full text-xs">
           <thead><tr style={{background: NAVY, color:'white'}}>
+            <th className="text-center px-2 py-2 font-semibold">Status</th>
             <th className="text-left px-3 py-2 font-semibold">Lender / Loan</th>
             <th className="text-left px-3 py-2 font-semibold">Entity</th>
             <th className="text-center px-2 py-2 font-semibold">Cleanup</th>
@@ -2288,26 +2309,34 @@ function DebtScheduleTab() {
             <th className="text-center px-2 py-2 font-semibold">Doc</th>
           </tr></thead>
           <tbody>
-            {filtered.map(d => (
-              <tr key={d.id} onClick={() => openDetails(d)} className="cursor-pointer hover:bg-gray-50" style={{borderBottom:'1px solid #f0f4f8'}}>
-                <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>{d.lender}</td>
-                <td className="px-3 py-2" style={{color:'#445566'}}>{d.entity}</td>
-                <td className="px-2 py-2 text-center">{d.cleanup && <span className="text-xs px-1.5 py-0.5 rounded" style={{background:'#fef3c7', color:'#8a5c1a', border:'1px solid #e8d38a'}}>Y</span>}</td>
-                <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmtNum(d.originalAmount)}</td>
-                <td className="px-3 py-2 text-center" style={{color:'#445566'}}>{fmtDate(d.originationDate)}</td>
-                <td className="px-3 py-2 text-center" style={{color:'#445566'}}>{fmtDate(d.maturityDate)}</td>
-                <td className="px-2 py-2 text-center" style={{color:'#445566'}}>{fmtRate(d.interestRate)}</td>
-                <td className="px-2 py-2 text-center" style={{color:'#445566'}}>{d.termMonths || '—'}</td>
-                <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmtNum(d.monthlyPayment)}</td>
-                <td className="px-3 py-2 text-right font-bold" style={{color: NAVY}}>{fmtNum(d.balance)}</td>
-                <td className="px-2 py-2 text-right" style={{color:'#8899aa'}}>{totals.grand > 0 && d.balance ? ((d.balance / totals.grand) * 100).toFixed(1) + '%' : '—'}</td>
-                <td className="px-2 py-2 text-center">{d.docFile ? <span style={{color: GOLD_ACCENT}}>📄</span> : <span style={{color:'#cbd5e0'}}>—</span>}</td>
-              </tr>
-            ))}
+            {filtered.map(d => {
+              const inactive = !d.active;
+              const txtColor = inactive ? '#a0aec0' : '#445566';
+              const navyColor = inactive ? '#a0aec0' : NAVY;
+              return (
+                <tr key={d.id} onClick={() => openDetails(d)} className="cursor-pointer hover:bg-gray-50" style={{borderBottom:'1px solid #f0f4f8', textDecoration: inactive ? 'line-through' : 'none', opacity: inactive ? 0.7 : 1}}>
+                  <td className="px-2 py-2 text-center">
+                    <input type="checkbox" checked={d.active} onClick={e => e.stopPropagation()} onChange={e => setDebts(prev => prev.map(x => x.id === d.id ? {...x, active: e.target.checked} : x))} title={d.active ? 'Active — uncheck to mark inactive' : 'Inactive — check to mark active'} />
+                  </td>
+                  <td className="px-3 py-2 font-semibold" style={{color: navyColor}}>{d.lender}</td>
+                  <td className="px-3 py-2" style={{color: txtColor}}>{d.entity}</td>
+                  <td className="px-2 py-2 text-center">{d.cleanup && <span className="text-xs px-1.5 py-0.5 rounded" style={{background:'#fef3c7', color:'#8a5c1a', border:'1px solid #e8d38a'}}>Y</span>}</td>
+                  <td className="px-3 py-2 text-right" style={{color: txtColor}}>{fmtNum(d.originalAmount)}</td>
+                  <td className="px-3 py-2 text-center" style={{color: txtColor}}>{fmtDate(d.originationDate)}</td>
+                  <td className="px-3 py-2 text-center" style={{color: txtColor}}>{fmtDate(d.maturityDate)}</td>
+                  <td className="px-2 py-2 text-center" style={{color: txtColor}}>{fmtRate(d.interestRate)}</td>
+                  <td className="px-2 py-2 text-center" style={{color: txtColor}}>{d.termMonths || '—'}</td>
+                  <td className="px-3 py-2 text-right" style={{color: txtColor}}>{fmtNum(d.monthlyPayment)}</td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color: navyColor}}>{fmtNum(d.balance)}</td>
+                  <td className="px-2 py-2 text-right" style={{color: inactive ? '#cbd5e0' : '#8899aa'}}>{d.active && totals.grand > 0 && d.balance ? ((d.balance / totals.grand) * 100).toFixed(1) + '%' : '—'}</td>
+                  <td className="px-2 py-2 text-center">{d.docFile ? <span style={{color: GOLD_ACCENT}}>📄</span> : <span style={{color:'#cbd5e0'}}>—</span>}</td>
+                </tr>
+              );
+            })}
             <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
-              <td className="px-3 py-2 font-bold" colSpan={9}>Total {filterEntity !== 'All' ? '(' + filterEntity + ')' : 'Long-Term Debt'}</td>
+              <td className="px-3 py-2 font-bold" colSpan={10}>Total {filterEntity !== 'All' ? '(' + filterEntity + ')' : 'Long-Term Debt'} {statusFilter !== 'All' ? '— ' + statusFilter : ''}</td>
               <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(filtered.reduce((s, d) => s + (d.balance || 0), 0))}</td>
-              <td className="px-2 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>100.0%</td>
+              <td className="px-2 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{statusFilter === 'Active' ? '100.0%' : '—'}</td>
               <td></td>
             </tr>
           </tbody>
@@ -2340,6 +2369,7 @@ function DebtScheduleTab() {
                   <div className="space-y-3 text-xs">
                     <DetailRow label="Lender / Loan" value={selected.lender} />
                     <DetailRow label="Entity" value={selected.entity} />
+                    <DetailRow label="Status" value={selected.active ? 'Active' : 'Inactive'} bold />
                     <DetailRow label="Cleanup Required" value={selected.cleanup ? 'Yes' : 'No'} />
                     <DetailRow label="Original Amount" value={fmtNum(selected.originalAmount)} />
                     <DetailRow label="Origination Date" value={fmtDate(selected.originationDate)} />
@@ -2360,6 +2390,7 @@ function DebtScheduleTab() {
                   <div className="space-y-3 text-xs">
                     <FormField label="Lender / Loan" value={editForm.lender} onChange={v => setEditForm({...editForm, lender: v})} />
                     <FormSelect label="Entity" value={editForm.entity} onChange={v => setEditForm({...editForm, entity: v})} options={DEBT_ENTITIES} />
+                    <FormCheckbox label="Active (uncheck if paid off, converted, or otherwise inactive)" value={editForm.active} onChange={v => setEditForm({...editForm, active: v})} />
                     <FormCheckbox label="Cleanup Required" value={editForm.cleanup} onChange={v => setEditForm({...editForm, cleanup: v})} />
                     <FormField label="Original Amount" type="number" value={editForm.originalAmount} onChange={v => setEditForm({...editForm, originalAmount: v === '' ? null : Number(v)})} />
                     <FormField label="Origination Date" type="date" value={editForm.originationDate} onChange={v => setEditForm({...editForm, originationDate: v})} />
