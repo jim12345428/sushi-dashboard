@@ -2141,6 +2141,308 @@ td.bold { font-weight: bold; }
 }
 
 /* ── HEAD OF SUSHI INCOME TAB ── */
+/* ── DEBT SCHEDULE TAB ── */
+const DEBT_ENTITIES = ['Fish Island', '5th Ave BK', 'NEF'];
+const DEBT_SEED = [
+  { id: 'd1', lender: '2500HD Van', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 995, notes: '', docFile: '' },
+  { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Island', cleanup: false, originalAmount: 800000, originationDate: '2025-10-21', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 350000, notes: 'FULLY CONVERTED to 16% Class B Membership Interest on 1/5/2026 per Note Conversion Agreement. Notes cancelled — BS balance of $350K should be $0; $450K reclass to equity needed.', docFile: '' },
+  { id: 'd3', lender: 'Kabbage Loan (Amex) / American Express Loan', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 32567, notes: '', docFile: '' },
+  { id: 'd4', lender: 'WRB Real Estate Group LLC', entity: 'Fish Island', cleanup: false, originalAmount: 300000, originationDate: '2025-12-10', maturityDate: '2026-01-04', interestRate: 0.12, termMonths: null, monthlyPayment: 3000, balance: 300000, notes: 'Debtor: Fish Island LLC. Lender: WRB Real Estate Group LLC. Subordinated; secured by guarantees from Fish Co Mgmt, Northeast Fish Co, 5th Ave Brooklyn, and James Thistle. Interest-only monthly starting 11/1/2025; principal+accrued due on demand from 1/4/2026.', docFile: '' },
+  { id: 'd5', lender: 'Newtek Bank SBA Loan #2742643', entity: 'Fish Island', cleanup: false, originalAmount: 2250000, originationDate: '2025-04-10', maturityDate: '2035-04-02', interestRate: null, termMonths: 120, monthlyPayment: null, balance: 2506990, notes: 'SBA loan. Borrowers: Fish Island LLC + 5th Ave Brooklyn LLC (joint & several). Guarantors: Northeast Fish Co (unlimited), Fish Co Mgmt (unlimited), Fish Acquisition Partners (unlimited), Sea Company (unlimited), James Thistle (unlimited), Dana Thistle (limited). Newtek Bank depository required for ACH. NOTE: BS balance $2,510,447 exceeds original $2,250,000 — likely includes accrued interest, fees, or this is a separate facility.', docFile: '' },
+  { id: 'd6', lender: 'Notes Payable', entity: 'Fish Island', cleanup: false, originalAmount: 100000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 100000, notes: '', docFile: '' },
+  { id: 'd7', lender: 'Oren Sauberman - $250K Note (Fish Co Mgmt)', entity: 'Fish Island', cleanup: false, originalAmount: 250000, originationDate: '2024-11-13', maturityDate: '2026-11-13', interestRate: 0.10, termMonths: null, monthlyPayment: 6250, balance: 250000, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Island, Northeast Fish, 5th Ave Brooklyn + 1st priority pledge of Debtor’s MIs in Guarantors and SeaCo’s MIs in Debtor. Quarterly interest in arrears; principal balloon at 11/13/2026 maturity. 15% default rate. Cross-default with $568K note. Use of proceeds: SBA repayment, legal/consulting fees, working capital.', docFile: '' },
+  { id: 'd8', lender: 'Oren Sauberman - $568K Note (Fish Co Mgmt)', entity: 'Fish Island', cleanup: false, originalAmount: 568000, originationDate: '2024-11-13', maturityDate: '2031-11-22', interestRate: 0.075, termMonths: 84, monthlyPayment: null, balance: 353875, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Same security package as $250K note. Interest 7.50% PIK first 24 months (capitalized monthly, 30/360). From 11/1/2026: monthly cash P&I, 5-yr amort. Balloon at 11/13/2031. 15% default rate. Cross-default with $250K note.', docFile: '' },
+  { id: 'd9', lender: 'Oren Sauberman - $186K Note (Northeast Fish)', entity: 'Fish Island', cleanup: false, originalAmount: 186000, originationDate: '2025-04-03', maturityDate: '2025-04-30', interestRate: 0.11, termMonths: null, monthlyPayment: 1705, balance: 186000, notes: 'Debtor: Northeast Fish Co LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Co Mgmt (Parent), Fish Island, 5th Ave Brooklyn + 2nd priority pledge of Parent’s MIs in Guarantors and SeaCo’s MIs in Parent. Maturity earlier of 4/30/2025 OR closing of new senior debt. Note: Newtek SBA closed 4/10/2025 - may have triggered maturity.', docFile: '' },
+  { id: 'd10', lender: 'Newtek Bank Line of Credit ($500K)', entity: 'Fish Island', cleanup: false, originalAmount: 500000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 66287, notes: 'Newtek Bank revolving line of credit. $500K commitment; current draw $66,287 per BS (1/31/2026) = $433,713 available. Need LOC agreement for rate, term, and covenants.', docFile: '' },
+  { id: 'd11', lender: 'Wells Fargo SBA Loan - 5th Ave Brooklyn', entity: '5th Ave BK', cleanup: false, originalAmount: 483000, originationDate: '2019-03-06', maturityDate: '2029-03-02', interestRate: 0.067, termMonths: 120, monthlyPayment: 5967.70, balance: 0, notes: 'Borrower: 5th Ave Brooklyn, LLC. Collateral: inventory, chattel paper, accounts, equipment, general intangibles, fixtures (Commercial Security Agreement 3/6/2019). Loan #711849860.', docFile: '' },
+  { id: 'd12', lender: 'First Citizens - 2x RAM 2500 ProMaster (Veh #1, #2)', entity: 'NEF', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 165597, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG5PE542063, 3C6LRVVG4PE542474). Branded Fjord. Combined payoff $165,597; expected sale value $120,000; net equity ($45,597).', docFile: '' },
+  { id: 'd13', lender: 'Ameris (Balboa) - 2x RAM 2500 ProMaster (Veh #3, #4)', entity: 'NEF', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 160000, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG1PE562519, 3C6LRVVG3PE533006). Combined payoff $160,000; expected sale value $120,000; net equity ($40,000).', docFile: '' },
+  { id: 'd14', lender: 'Bank of Montreal - 2x GMC Savana (Veh #5, #6)', entity: 'NEF', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 140000, notes: '2x 2025 GMC Savana (VINs 1GTZ7HF78S1257927, 1GTZ7HF78S1257846). Combined payoff $140,000; expected sale value $118,000; net equity ($22,000).', docFile: '' },
+  { id: 'd15', lender: 'Peter Stathakos', entity: 'Fish Island', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
+  { id: 'd16', lender: 'Credit Card', entity: 'Fish Island', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
+];
+
+function DebtScheduleTab() {
+  const [debts, setDebts] = useState(() => {
+    if (typeof window === 'undefined') return DEBT_SEED;
+    try { const v = localStorage.getItem('debt_schedule'); return v ? JSON.parse(v) : DEBT_SEED; } catch { return DEBT_SEED; }
+  });
+  const [selected, setSelected] = useState(null);
+  const [filterEntity, setFilterEntity] = useState('All');
+  const [showCleanupOnly, setShowCleanupOnly] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  useEffect(() => { localStorage.setItem('debt_schedule', JSON.stringify(debts)); }, [debts]);
+
+  const filtered = useMemo(() => {
+    return debts.filter(d => {
+      if (filterEntity !== 'All' && d.entity !== filterEntity) return false;
+      if (showCleanupOnly && !d.cleanup) return false;
+      return true;
+    });
+  }, [debts, filterEntity, showCleanupOnly]);
+
+  const totals = useMemo(() => {
+    const byEntity = {};
+    DEBT_ENTITIES.forEach(e => { byEntity[e] = 0; });
+    let grand = 0;
+    debts.forEach(d => {
+      byEntity[d.entity] = (byEntity[d.entity] || 0) + (d.balance || 0);
+      grand += d.balance || 0;
+    });
+    return { byEntity, grand };
+  }, [debts]);
+
+  function openDetails(d) {
+    setSelected(d);
+    setEditForm({ ...d });
+    setEditing(false);
+  }
+
+  function saveEdit() {
+    setDebts(prev => prev.map(d => d.id === editForm.id ? editForm : d));
+    setSelected(editForm);
+    setEditing(false);
+  }
+
+  function deleteDebt(id) {
+    if (!confirm('Delete this debt entry?')) return;
+    setDebts(prev => prev.filter(d => d.id !== id));
+    setSelected(null);
+  }
+
+  function addNewDebt() {
+    const newDebt = {
+      id: 'd' + Date.now(),
+      lender: '', entity: 'Fish Island', cleanup: false,
+      originalAmount: null, originationDate: '', maturityDate: '',
+      interestRate: null, termMonths: null, monthlyPayment: null,
+      balance: 0, notes: '', docFile: '',
+    };
+    setDebts(prev => [...prev, newDebt]);
+    openDetails(newDebt);
+    setEditing(true);
+    setShowAddForm(false);
+  }
+
+  const fmtRate = r => r == null ? '—' : (r * 100).toFixed(2) + '%';
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : '—';
+  const fmtNum = v => v == null ? '—' : '$' + Math.round(v).toLocaleString('en-US');
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold" style={{color: NAVY}}>Debt Schedule</h1>
+          <p className="text-sm mt-1" style={{color:'#6b7a99'}}>All debts across {DEBT_ENTITIES.join(', ')}. Click any row for details and loan documents.</p>
+        </div>
+        <button onClick={addNewDebt} className="px-4 py-2 rounded-lg text-xs font-semibold text-white" style={{background: NAVY, border:'1px solid '+GOLD_ACCENT}}>+ Add Debt</button>
+      </div>
+
+      {/* Totals */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="rounded-xl p-4" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Total Debt</div>
+          <div className="text-2xl font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.grand)}</div>
+        </div>
+        {DEBT_ENTITIES.map(ent => (
+          <div key={ent} className="rounded-xl p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
+            <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>{ent}</div>
+            <div className="text-2xl font-bold" style={{color: NAVY}}>{fmtNum(totals.byEntity[ent] || 0)}</div>
+            <div className="text-xs mt-1" style={{color:'#8899aa'}}>{totals.grand > 0 ? ((totals.byEntity[ent] / totals.grand) * 100).toFixed(1) : 0}% of total</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="rounded-xl p-3 mb-4 flex items-center gap-3" style={{background:'white', border:'1px solid #dde4ed'}}>
+        <span className="text-xs font-semibold" style={{color:'#6b7a99'}}>Entity:</span>
+        <select value={filterEntity} onChange={e => setFilterEntity(e.target.value)} className="text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
+          <option value="All">All</option>
+          {DEBT_ENTITIES.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
+        <label className="flex items-center gap-1 text-xs cursor-pointer ml-3" style={{color:'#445566'}}>
+          <input type="checkbox" checked={showCleanupOnly} onChange={e => setShowCleanupOnly(e.target.checked)} />
+          Show cleanup-flagged only
+        </label>
+        <span className="text-xs ml-auto" style={{color:'#8899aa'}}>{filtered.length} of {debts.length}</span>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <table className="w-full text-xs">
+          <thead><tr style={{background: NAVY, color:'white'}}>
+            <th className="text-left px-3 py-2 font-semibold">Lender / Loan</th>
+            <th className="text-left px-3 py-2 font-semibold">Entity</th>
+            <th className="text-center px-2 py-2 font-semibold">Cleanup</th>
+            <th className="text-right px-3 py-2 font-semibold">Original</th>
+            <th className="text-center px-3 py-2 font-semibold">Origin Date</th>
+            <th className="text-center px-3 py-2 font-semibold">Maturity</th>
+            <th className="text-center px-2 py-2 font-semibold">Rate</th>
+            <th className="text-center px-2 py-2 font-semibold">Term</th>
+            <th className="text-right px-3 py-2 font-semibold">Mthly Pmt</th>
+            <th className="text-right px-3 py-2 font-semibold">Balance</th>
+            <th className="text-right px-2 py-2 font-semibold">% Total</th>
+            <th className="text-center px-2 py-2 font-semibold">Doc</th>
+          </tr></thead>
+          <tbody>
+            {filtered.map(d => (
+              <tr key={d.id} onClick={() => openDetails(d)} className="cursor-pointer hover:bg-gray-50" style={{borderBottom:'1px solid #f0f4f8'}}>
+                <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>{d.lender}</td>
+                <td className="px-3 py-2" style={{color:'#445566'}}>{d.entity}</td>
+                <td className="px-2 py-2 text-center">{d.cleanup && <span className="text-xs px-1.5 py-0.5 rounded" style={{background:'#fef3c7', color:'#8a5c1a', border:'1px solid #e8d38a'}}>Y</span>}</td>
+                <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmtNum(d.originalAmount)}</td>
+                <td className="px-3 py-2 text-center" style={{color:'#445566'}}>{fmtDate(d.originationDate)}</td>
+                <td className="px-3 py-2 text-center" style={{color:'#445566'}}>{fmtDate(d.maturityDate)}</td>
+                <td className="px-2 py-2 text-center" style={{color:'#445566'}}>{fmtRate(d.interestRate)}</td>
+                <td className="px-2 py-2 text-center" style={{color:'#445566'}}>{d.termMonths || '—'}</td>
+                <td className="px-3 py-2 text-right" style={{color:'#445566'}}>{fmtNum(d.monthlyPayment)}</td>
+                <td className="px-3 py-2 text-right font-bold" style={{color: NAVY}}>{fmtNum(d.balance)}</td>
+                <td className="px-2 py-2 text-right" style={{color:'#8899aa'}}>{totals.grand > 0 && d.balance ? ((d.balance / totals.grand) * 100).toFixed(1) + '%' : '—'}</td>
+                <td className="px-2 py-2 text-center">{d.docFile ? <span style={{color: GOLD_ACCENT}}>📄</span> : <span style={{color:'#cbd5e0'}}>—</span>}</td>
+              </tr>
+            ))}
+            <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
+              <td className="px-3 py-2 font-bold" colSpan={9}>Total {filterEntity !== 'All' ? '(' + filterEntity + ')' : 'Long-Term Debt'}</td>
+              <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(filtered.reduce((s, d) => s + (d.balance || 0), 0))}</td>
+              <td className="px-2 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>100.0%</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Detail Modal */}
+      {selected && (
+        <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{background:'rgba(15,31,61,0.7)'}} onClick={() => setSelected(null)}>
+          <div onClick={e => e.stopPropagation()} className="rounded-xl overflow-hidden flex flex-col" style={{background:'white', border:'1px solid #dde4ed', width:'95vw', maxWidth:1400, height:'90vh'}}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{background: NAVY, color:'white', borderBottom:'2px solid '+GOLD_ACCENT}}>
+              <div>
+                <div className="text-base font-bold">{selected.lender || 'New Debt'}</div>
+                <div className="text-xs" style={{color:'rgba(255,255,255,0.6)'}}>{selected.entity}</div>
+              </div>
+              <div className="flex gap-2">
+                {!editing && <button onClick={() => setEditing(true)} className="px-3 py-1 rounded text-xs font-semibold" style={{background: GOLD_ACCENT, color: NAVY}}>Edit</button>}
+                {editing && <>
+                  <button onClick={saveEdit} className="px-3 py-1 rounded text-xs font-semibold" style={{background:'#1a6b3a', color:'white'}}>Save</button>
+                  <button onClick={() => { setEditing(false); setEditForm({...selected}); }} className="px-3 py-1 rounded text-xs font-semibold" style={{background:'#6b7a99', color:'white'}}>Cancel</button>
+                </>}
+                <button onClick={() => deleteDebt(selected.id)} className="px-3 py-1 rounded text-xs font-semibold" style={{background:'#b5282a', color:'white'}}>Delete</button>
+                <button onClick={() => setSelected(null)} className="px-2 py-1 rounded text-sm" style={{background:'rgba(255,255,255,0.2)', color:'white'}}>✕</button>
+              </div>
+            </div>
+            <div className="flex-1 grid grid-cols-2 overflow-hidden" style={{minHeight:0}}>
+              {/* Details Pane */}
+              <div className="overflow-y-auto p-5 border-r" style={{borderColor:'#dde4ed'}}>
+                {!editing ? (
+                  <div className="space-y-3 text-xs">
+                    <DetailRow label="Lender / Loan" value={selected.lender} />
+                    <DetailRow label="Entity" value={selected.entity} />
+                    <DetailRow label="Cleanup Required" value={selected.cleanup ? 'Yes' : 'No'} />
+                    <DetailRow label="Original Amount" value={fmtNum(selected.originalAmount)} />
+                    <DetailRow label="Origination Date" value={fmtDate(selected.originationDate)} />
+                    <DetailRow label="Maturity Date" value={fmtDate(selected.maturityDate)} />
+                    <DetailRow label="Interest Rate" value={fmtRate(selected.interestRate)} />
+                    <DetailRow label="Term (Months)" value={selected.termMonths || '—'} />
+                    <DetailRow label="Monthly Payment" value={fmtNum(selected.monthlyPayment)} />
+                    <DetailRow label="Current Balance" value={fmtNum(selected.balance)} bold />
+                    <DetailRow label="Document File" value={selected.docFile || '— (drop a PDF in /public/loan-docs/ and reference by filename)'} />
+                    {selected.notes && (
+                      <div className="pt-3 mt-3" style={{borderTop:'1px solid #dde4ed'}}>
+                        <div className="text-xs font-semibold uppercase tracking-wide mb-2" style={{color:'#6b7a99'}}>Notes</div>
+                        <div className="text-xs leading-relaxed" style={{color:'#445566', whiteSpace:'pre-wrap'}}>{selected.notes}</div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-xs">
+                    <FormField label="Lender / Loan" value={editForm.lender} onChange={v => setEditForm({...editForm, lender: v})} />
+                    <FormSelect label="Entity" value={editForm.entity} onChange={v => setEditForm({...editForm, entity: v})} options={DEBT_ENTITIES} />
+                    <FormCheckbox label="Cleanup Required" value={editForm.cleanup} onChange={v => setEditForm({...editForm, cleanup: v})} />
+                    <FormField label="Original Amount" type="number" value={editForm.originalAmount} onChange={v => setEditForm({...editForm, originalAmount: v === '' ? null : Number(v)})} />
+                    <FormField label="Origination Date" type="date" value={editForm.originationDate} onChange={v => setEditForm({...editForm, originationDate: v})} />
+                    <FormField label="Maturity Date" type="date" value={editForm.maturityDate} onChange={v => setEditForm({...editForm, maturityDate: v})} />
+                    <FormField label="Interest Rate (decimal, e.g. 0.10 for 10%)" type="number" step="0.0001" value={editForm.interestRate} onChange={v => setEditForm({...editForm, interestRate: v === '' ? null : Number(v)})} />
+                    <FormField label="Term (Months)" type="number" value={editForm.termMonths} onChange={v => setEditForm({...editForm, termMonths: v === '' ? null : Number(v)})} />
+                    <FormField label="Monthly Payment" type="number" value={editForm.monthlyPayment} onChange={v => setEditForm({...editForm, monthlyPayment: v === '' ? null : Number(v)})} />
+                    <FormField label="Current Balance" type="number" value={editForm.balance} onChange={v => setEditForm({...editForm, balance: v === '' ? 0 : Number(v)})} />
+                    <FormField label="Document Filename (e.g. newtek-sba.pdf)" value={editForm.docFile} onChange={v => setEditForm({...editForm, docFile: v})} />
+                    <FormTextarea label="Notes" value={editForm.notes} onChange={v => setEditForm({...editForm, notes: v})} />
+                  </div>
+                )}
+              </div>
+              {/* Doc Preview Pane */}
+              <div className="overflow-hidden flex flex-col" style={{background:'#f7f9fc'}}>
+                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide" style={{color:'#6b7a99', borderBottom:'1px solid #dde4ed'}}>Loan Document</div>
+                {selected.docFile ? (
+                  <iframe src={'/loan-docs/' + selected.docFile} className="flex-1 w-full" style={{border:'none'}} title="Loan Document" />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center p-8 text-center">
+                    <div>
+                      <div className="text-4xl mb-3" style={{color:'#cbd5e0'}}>📄</div>
+                      <div className="text-sm font-semibold mb-2" style={{color:'#445566'}}>No document linked</div>
+                      <div className="text-xs leading-relaxed max-w-xs mx-auto" style={{color:'#8899aa'}}>
+                        Drop the loan PDF into <code style={{background:'white', padding:'1px 4px', borderRadius:3, color: NAVY}}>public/loan-docs/</code> and click Edit to reference it by filename.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailRow({ label, value, bold }) {
+  return (
+    <div className="flex justify-between gap-3 pb-2" style={{borderBottom:'1px solid #f0f4f8'}}>
+      <span className="text-xs" style={{color:'#8899aa'}}>{label}</span>
+      <span className="text-xs text-right" style={{color: bold ? NAVY : '#445566', fontWeight: bold ? 700 : 400}}>{value}</span>
+    </div>
+  );
+}
+function FormField({ label, value, onChange, type = 'text', step }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold block mb-1" style={{color:'#6b7a99'}}>{label}</label>
+      <input type={type} step={step} value={value == null ? '' : value} onChange={e => onChange(e.target.value)}
+        className="w-full rounded border px-2 py-1 text-xs" style={{borderColor:'#dde4ed', color: NAVY}} />
+    </div>
+  );
+}
+function FormSelect({ label, value, onChange, options }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold block mb-1" style={{color:'#6b7a99'}}>{label}</label>
+      <select value={value} onChange={e => onChange(e.target.value)} className="w-full rounded border px-2 py-1 text-xs" style={{borderColor:'#dde4ed', color: NAVY}}>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+function FormCheckbox({ label, value, onChange }) {
+  return (
+    <label className="flex items-center gap-2 text-xs cursor-pointer" style={{color:'#445566'}}>
+      <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} />
+      <span className="font-semibold" style={{color:'#6b7a99'}}>{label}</span>
+    </label>
+  );
+}
+function FormTextarea({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold block mb-1" style={{color:'#6b7a99'}}>{label}</label>
+      <textarea value={value || ''} onChange={e => onChange(e.target.value)} rows={6}
+        className="w-full rounded border px-2 py-1 text-xs" style={{borderColor:'#dde4ed', color: NAVY}} />
+    </div>
+  );
+}
+
 function HoSIncomeTab({ storeSales }) {
   const actualRates = useMemo(() => calcActualGrowthRates(storeSales), [storeSales]);
   const [growth, setGrowth] = useState(10);
@@ -3389,7 +3691,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['hos','HoS Income'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
+        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['hos','HoS Income'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['debt','Debt Schedule'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -3401,7 +3703,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {!['modeler','overview','recruit','income','hos','compare','board','roadmap'].includes(tab) && (
+        {!['modeler','overview','recruit','income','hos','compare','board','debt','roadmap'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -3929,6 +4231,10 @@ export default function Dashboard() {
 
           {tab === 'hos' && (
             <HoSIncomeTab storeSales={allSales} />
+          )}
+
+          {tab === 'debt' && (
+            <DebtScheduleTab />
           )}
 
           {/* ROADMAP */}
