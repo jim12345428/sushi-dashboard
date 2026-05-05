@@ -2163,23 +2163,37 @@ const DEBT_SEED = [
 ];
 
 /* ── CLEANUP TAB ── */
-const CLEANUP_CATEGORIES = ['Debt', 'Litigation', 'Payables', 'Other'];
+const CLEANUP_CATEGORIES = ['Debt', 'Litigation', 'Payables', 'Receivable', 'Asset Sale', 'Other'];
 const CLEANUP_SEED = [
-  { id: 'c1', label: 'Sushi Litigation Settlement', category: 'Litigation', amount: 400000, entity: 'Fish Island', resolved: false, notes: '' },
-  { id: 'c2', label: 'Payables Payoff Balance', category: 'Payables', amount: 250000, entity: 'Fish Island', resolved: false, notes: '' },
+  { id: 'c1', label: 'Sushi Litigation Settlement', category: 'Litigation', type: 'liability', amount: 400000, entity: 'Fish Island', resolved: false, notes: '' },
+  { id: 'c2', label: 'Payables Payoff Balance', category: 'Payables', type: 'liability', amount: 250000, entity: 'Fish Island', resolved: false, notes: '' },
+  { id: 'c3', label: 'Outstanding Receivables', category: 'Receivable', type: 'asset', amount: 115000, entity: 'Fish Island', resolved: false, notes: 'Approximate balance of accounts receivable to collect.' },
+  { id: 'c4', label: 'Vehicle Sale Proceeds', category: 'Asset Sale', type: 'asset', amount: 247000, entity: 'NEF', resolved: false, notes: 'Expected proceeds from selling NEF vehicles (RAM ProMasters + GMC Savanas) to fund cleanup.' },
 ];
 
 function CleanupTab() {
   const [items, setItems] = useState(() => {
-    if (typeof window === 'undefined') return CLEANUP_SEED;
-    try { const v = localStorage.getItem('cleanup_items'); return v ? JSON.parse(v) : CLEANUP_SEED; } catch { return CLEANUP_SEED; }
+    const migrate = arr => arr.map(i => ({ ...i, type: i.type || 'liability' }));
+    if (typeof window === 'undefined') return migrate(CLEANUP_SEED);
+    try {
+      const v = localStorage.getItem('cleanup_items');
+      if (!v) return migrate(CLEANUP_SEED);
+      const parsed = JSON.parse(v);
+      // Auto-add asset seed items if missing (one-time migration)
+      const hasReceivables = parsed.some(i => i.id === 'c3');
+      const hasVehicleSale = parsed.some(i => i.id === 'c4');
+      const merged = [...parsed];
+      if (!hasReceivables) merged.push(CLEANUP_SEED[2]);
+      if (!hasVehicleSale) merged.push(CLEANUP_SEED[3]);
+      return migrate(merged);
+    } catch { return migrate(CLEANUP_SEED); }
   });
   const [debts, setDebts] = useState(() => {
     if (typeof window === 'undefined') return [];
     try { const v = localStorage.getItem('debt_schedule'); return v ? JSON.parse(v) : DEBT_SEED; } catch { return DEBT_SEED; }
   });
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newItem, setNewItem] = useState({ label: '', category: 'Other', amount: 0, entity: 'Fish Island', notes: '' });
+  const [newItem, setNewItem] = useState({ label: '', category: 'Other', type: 'liability', amount: 0, entity: 'Fish Island', notes: '' });
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
 
@@ -2201,6 +2215,7 @@ function CleanupTab() {
       id: 'debt:' + d.id,
       label: d.lender,
       category: 'Debt',
+      type: 'liability',
       amount: d.balance || 0,
       entity: d.entity,
       resolved: !d.active,
@@ -2208,26 +2223,33 @@ function CleanupTab() {
       isDebt: true,
       sourceDebt: d,
     }));
-    const itemRows = items.map(i => ({ ...i, isDebt: false }));
-    return [...debtRows, ...itemRows];
+    const itemRows = items.map(i => ({ ...i, type: i.type || 'liability', isDebt: false }));
+    // Sort: liabilities first, then assets
+    return [...debtRows, ...itemRows].sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'liability' ? -1 : 1;
+      return 0;
+    });
   }, [cleanupDebts, items]);
 
   const totals = useMemo(() => {
-    let total = 0, resolved = 0, pending = 0;
-    const byCategory = { Debt: 0, Litigation: 0, Payables: 0, Other: 0 };
+    const liab = { total: 0, resolved: 0, pending: 0 };
+    const asset = { total: 0, resolved: 0, pending: 0 };
+    const byCategory = { Debt: 0, Litigation: 0, Payables: 0, Receivable: 0, 'Asset Sale': 0, Other: 0 };
     allRows.forEach(r => {
-      total += r.amount || 0;
-      if (r.resolved) resolved += r.amount || 0;
-      else pending += r.amount || 0;
+      const bucket = r.type === 'asset' ? asset : liab;
+      bucket.total += r.amount || 0;
+      if (r.resolved) bucket.resolved += r.amount || 0;
+      else bucket.pending += r.amount || 0;
       byCategory[r.category] = (byCategory[r.category] || 0) + (r.amount || 0);
     });
-    return { total, resolved, pending, byCategory };
+    const netNeeded = liab.pending - asset.pending;
+    return { liab, asset, byCategory, netNeeded };
   }, [allRows]);
 
   function addItem() {
     if (!newItem.label || !newItem.amount) return;
     setItems(prev => [...prev, { id: 'c' + Date.now(), ...newItem, amount: Number(newItem.amount), resolved: false }]);
-    setNewItem({ label: '', category: 'Other', amount: 0, entity: 'Fish Island', notes: '' });
+    setNewItem({ label: '', category: 'Other', type: 'liability', amount: 0, entity: 'Fish Island', notes: '' });
     setShowAddForm(false);
   }
 
@@ -2276,10 +2298,17 @@ function CleanupTab() {
       {showAddForm && (
         <div className="rounded-xl p-4 mb-5" style={{background:'white', border:'2px solid '+GOLD_ACCENT}}>
           <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>New Cleanup Item</div>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-6 gap-3">
             <div className="col-span-2">
               <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Label</label>
               <input value={newItem.label} onChange={e => setNewItem({...newItem, label: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Type</label>
+              <select value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
+                <option value="liability">Liability (need to pay off)</option>
+                <option value="asset">Asset (need to collect/sell)</option>
+              </select>
             </div>
             <div>
               <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Category</label>
@@ -2297,7 +2326,7 @@ function CleanupTab() {
               <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Amount</label>
               <input type="number" value={newItem.amount} onChange={e => setNewItem({...newItem, amount: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
             </div>
-            <div className="col-span-5">
+            <div className="col-span-6">
               <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Notes</label>
               <textarea value={newItem.notes} onChange={e => setNewItem({...newItem, notes: e.target.value})} rows={2} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
             </div>
@@ -2308,20 +2337,20 @@ function CleanupTab() {
 
       {/* Summary */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="rounded-xl p-4" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Total Cleanup</div>
-          <div className="text-2xl font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.total)}</div>
-          <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>{allRows.length} items</div>
-        </div>
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #f5c6c6'}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Pending</div>
-          <div className="text-2xl font-bold" style={{color:'#b5282a'}}>{fmtNum(totals.pending)}</div>
-          <div className="text-xs mt-1" style={{color:'#8899aa'}}>{allRows.filter(r => !r.resolved).length} items</div>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Liabilities (Pending)</div>
+          <div className="text-2xl font-bold" style={{color:'#b5282a'}}>{fmtNum(totals.liab.pending)}</div>
+          <div className="text-xs mt-1" style={{color:'#8899aa'}}>{fmtNum(totals.liab.total)} total · {allRows.filter(r => r.type === 'liability').length} items</div>
         </div>
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #9dd4b5'}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Resolved</div>
-          <div className="text-2xl font-bold" style={{color:'#1a6b3a'}}>{fmtNum(totals.resolved)}</div>
-          <div className="text-xs mt-1" style={{color:'#8899aa'}}>{allRows.filter(r => r.resolved).length} items</div>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Assets to Liquidate (Pending)</div>
+          <div className="text-2xl font-bold" style={{color:'#1a6b3a'}}>{fmtNum(totals.asset.pending)}</div>
+          <div className="text-xs mt-1" style={{color:'#8899aa'}}>{fmtNum(totals.asset.total)} total · {allRows.filter(r => r.type === 'asset').length} items</div>
+        </div>
+        <div className="rounded-xl p-4" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Net Cash Needed</div>
+          <div className="text-2xl font-bold" style={{color: totals.netNeeded > 0 ? GOLD_ACCENT : '#9dd4b5'}}>{fmtNum(totals.netNeeded)}</div>
+          <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>Liabilities − Assets {totals.netNeeded < 0 ? '(surplus)' : ''}</div>
         </div>
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
           <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>By Category</div>
@@ -2341,6 +2370,7 @@ function CleanupTab() {
         <table className="w-full text-xs">
           <thead><tr style={{background: NAVY, color:'white'}}>
             <th className="text-center px-2 py-2 font-semibold">Resolved</th>
+            <th className="text-center px-2 py-2 font-semibold">Type</th>
             <th className="text-left px-3 py-2 font-semibold">Item</th>
             <th className="text-left px-3 py-2 font-semibold">Category</th>
             <th className="text-left px-3 py-2 font-semibold">Entity</th>
@@ -2351,10 +2381,26 @@ function CleanupTab() {
           <tbody>
             {allRows.map(r => {
               const isEditing = editingId === r.id;
+              const isAsset = r.type === 'asset';
+              const amountColor = isAsset ? '#1a6b3a' : NAVY;
               return (
-                <tr key={r.id} style={{borderBottom:'1px solid #f0f4f8', textDecoration: r.resolved ? 'line-through' : 'none', opacity: r.resolved ? 0.6 : 1}}>
+                <tr key={r.id} style={{borderBottom:'1px solid #f0f4f8', textDecoration: r.resolved ? 'line-through' : 'none', opacity: r.resolved ? 0.6 : 1, background: isAsset ? '#f9fdf9' : 'white'}}>
                   <td className="px-2 py-2 text-center">
                     <input type="checkbox" checked={r.resolved} onChange={() => toggleResolved(r)} title={r.resolved ? 'Mark unresolved' : 'Mark resolved'} />
+                  </td>
+                  <td className="px-2 py-2 text-center">
+                    {isEditing ? (
+                      <select value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})} className="text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color: NAVY}}>
+                        <option value="liability">Liab</option>
+                        <option value="asset">Asset</option>
+                      </select>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 rounded font-semibold" style={{
+                        background: isAsset ? '#edfaf2' : '#fef2f2',
+                        color: isAsset ? '#1a6b3a' : '#b5282a',
+                        border: '1px solid ' + (isAsset ? '#9dd4b5' : '#f5c6c6'),
+                      }}>{isAsset ? 'Asset' : 'Liab'}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>
                     {isEditing ? <input value={editForm.label} onChange={e => setEditForm({...editForm, label: e.target.value})} className="w-full text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color: NAVY}} /> : r.label}
@@ -2366,8 +2412,8 @@ function CleanupTab() {
                       </select>
                     ) : (
                       <span className="text-xs px-1.5 py-0.5 rounded" style={{
-                        background: r.category === 'Debt' ? '#edf6fb' : r.category === 'Litigation' ? '#fef2f2' : r.category === 'Payables' ? '#fef3c7' : '#f7f9fc',
-                        color: r.category === 'Debt' ? '#1a6b8a' : r.category === 'Litigation' ? '#b5282a' : r.category === 'Payables' ? '#8a5c1a' : '#445566',
+                        background: r.category === 'Debt' ? '#edf6fb' : r.category === 'Litigation' ? '#fef2f2' : r.category === 'Payables' ? '#fef3c7' : r.category === 'Receivable' ? '#edfaf2' : r.category === 'Asset Sale' ? '#edfaf2' : '#f7f9fc',
+                        color: r.category === 'Debt' ? '#1a6b8a' : r.category === 'Litigation' ? '#b5282a' : r.category === 'Payables' ? '#8a5c1a' : (r.category === 'Receivable' || r.category === 'Asset Sale') ? '#1a6b3a' : '#445566',
                       }}>{r.category}</span>
                     )}
                   </td>
@@ -2378,8 +2424,8 @@ function CleanupTab() {
                       </select>
                     ) : r.entity}
                   </td>
-                  <td className="px-3 py-2 text-right font-bold" style={{color: NAVY}}>
-                    {isEditing ? <input type="number" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: e.target.value})} className="w-24 text-xs rounded border px-1 py-0.5 text-right" style={{borderColor:'#dde4ed', color: NAVY}} /> : fmtNum(r.amount)}
+                  <td className="px-3 py-2 text-right font-bold" style={{color: amountColor}}>
+                    {isEditing ? <input type="number" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: e.target.value})} className="w-24 text-xs rounded border px-1 py-0.5 text-right" style={{borderColor:'#dde4ed', color: NAVY}} /> : (isAsset ? '+' : '') + fmtNum(r.amount)}
                   </td>
                   <td className="px-3 py-2 text-xs" style={{color:'#6b7a99', maxWidth: 400}}>
                     {isEditing ? <textarea value={editForm.notes} onChange={e => setEditForm({...editForm, notes: e.target.value})} rows={2} className="w-full text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color: NAVY}} /> : (r.notes ? <span title={r.notes}>{r.notes.length > 80 ? r.notes.slice(0, 80) + '…' : r.notes}</span> : '—')}
@@ -2402,9 +2448,19 @@ function CleanupTab() {
                 </tr>
               );
             })}
+            <tr style={{background:'#fef2f2', borderTop:'2px solid #f5c6c6'}}>
+              <td colSpan={5} className="px-3 py-2 font-bold" style={{color:'#b5282a'}}>Total Liabilities (Pending)</td>
+              <td className="px-3 py-2 text-right font-bold" style={{color:'#b5282a'}}>{fmtNum(totals.liab.pending)}</td>
+              <td colSpan={2}></td>
+            </tr>
+            <tr style={{background:'#edfaf2'}}>
+              <td colSpan={5} className="px-3 py-2 font-bold" style={{color:'#1a6b3a'}}>Total Assets to Liquidate (Pending)</td>
+              <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b3a'}}>+{fmtNum(totals.asset.pending)}</td>
+              <td colSpan={2}></td>
+            </tr>
             <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
-              <td colSpan={4} className="px-3 py-2 font-bold">Total Cleanup</td>
-              <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.total)}</td>
+              <td colSpan={5} className="px-3 py-2 font-bold">Net Cash Needed</td>
+              <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.netNeeded)}</td>
               <td colSpan={2}></td>
             </tr>
           </tbody>
