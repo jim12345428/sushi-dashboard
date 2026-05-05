@@ -2162,6 +2162,262 @@ const DEBT_SEED = [
   { id: 'd16', lender: 'Credit Card', entity: 'Fish Island', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
 ];
 
+/* ── CLEANUP TAB ── */
+const CLEANUP_CATEGORIES = ['Debt', 'Litigation', 'Payables', 'Other'];
+const CLEANUP_SEED = [
+  { id: 'c1', label: 'Sushi Litigation Settlement', category: 'Litigation', amount: 400000, entity: 'Fish Island', resolved: false, notes: '' },
+  { id: 'c2', label: 'Payables Payoff Balance', category: 'Payables', amount: 250000, entity: 'Fish Island', resolved: false, notes: '' },
+];
+
+function CleanupTab() {
+  const [items, setItems] = useState(() => {
+    if (typeof window === 'undefined') return CLEANUP_SEED;
+    try { const v = localStorage.getItem('cleanup_items'); return v ? JSON.parse(v) : CLEANUP_SEED; } catch { return CLEANUP_SEED; }
+  });
+  const [debts, setDebts] = useState(() => {
+    if (typeof window === 'undefined') return [];
+    try { const v = localStorage.getItem('debt_schedule'); return v ? JSON.parse(v) : DEBT_SEED; } catch { return DEBT_SEED; }
+  });
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newItem, setNewItem] = useState({ label: '', category: 'Other', amount: 0, entity: 'Fish Island', notes: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+
+  useEffect(() => { localStorage.setItem('cleanup_items', JSON.stringify(items)); }, [items]);
+
+  // Re-read debts when window regains focus (in case Debt tab updated them)
+  useEffect(() => {
+    function refresh() {
+      try { const v = localStorage.getItem('debt_schedule'); if (v) setDebts(JSON.parse(v)); } catch {}
+    }
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
+
+  const cleanupDebts = useMemo(() => debts.filter(d => d.cleanup), [debts]);
+
+  const allRows = useMemo(() => {
+    const debtRows = cleanupDebts.map(d => ({
+      id: 'debt:' + d.id,
+      label: d.lender,
+      category: 'Debt',
+      amount: d.balance || 0,
+      entity: d.entity,
+      resolved: !d.active,
+      notes: d.notes || '',
+      isDebt: true,
+      sourceDebt: d,
+    }));
+    const itemRows = items.map(i => ({ ...i, isDebt: false }));
+    return [...debtRows, ...itemRows];
+  }, [cleanupDebts, items]);
+
+  const totals = useMemo(() => {
+    let total = 0, resolved = 0, pending = 0;
+    const byCategory = { Debt: 0, Litigation: 0, Payables: 0, Other: 0 };
+    allRows.forEach(r => {
+      total += r.amount || 0;
+      if (r.resolved) resolved += r.amount || 0;
+      else pending += r.amount || 0;
+      byCategory[r.category] = (byCategory[r.category] || 0) + (r.amount || 0);
+    });
+    return { total, resolved, pending, byCategory };
+  }, [allRows]);
+
+  function addItem() {
+    if (!newItem.label || !newItem.amount) return;
+    setItems(prev => [...prev, { id: 'c' + Date.now(), ...newItem, amount: Number(newItem.amount), resolved: false }]);
+    setNewItem({ label: '', category: 'Other', amount: 0, entity: 'Fish Island', notes: '' });
+    setShowAddForm(false);
+  }
+
+  function startEdit(item) {
+    setEditingId(item.id);
+    setEditForm({ ...item });
+  }
+
+  function saveEdit() {
+    setItems(prev => prev.map(i => i.id === editForm.id ? { ...editForm, amount: Number(editForm.amount) } : i));
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  function deleteItem(id) {
+    if (!confirm('Delete this cleanup item?')) return;
+    setItems(prev => prev.filter(i => i.id !== id));
+  }
+
+  function toggleResolved(row) {
+    if (row.isDebt) {
+      // Toggle the underlying debt's active flag
+      const updated = debts.map(d => d.id === row.sourceDebt.id ? { ...d, active: !d.active } : d);
+      setDebts(updated);
+      localStorage.setItem('debt_schedule', JSON.stringify(updated));
+    } else {
+      setItems(prev => prev.map(i => i.id === row.id ? { ...i, resolved: !i.resolved } : i));
+    }
+  }
+
+  const fmtNum = v => v == null ? '—' : '$' + Math.round(v).toLocaleString('en-US');
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold" style={{color: NAVY}}>Balance Sheet Cleanup</h1>
+          <p className="text-sm mt-1" style={{color:'#6b7a99'}}>Items that need to be paid off, written off, reclassified, or otherwise resolved on the balance sheet.</p>
+        </div>
+        <button onClick={() => setShowAddForm(!showAddForm)} className="px-4 py-2 rounded-lg text-xs font-semibold text-white" style={{background: showAddForm ? '#6b7a99' : NAVY, border:'1px solid '+GOLD_ACCENT}}>
+          {showAddForm ? 'Cancel' : '+ Add Cleanup Item'}
+        </button>
+      </div>
+
+      {/* Add Form */}
+      {showAddForm && (
+        <div className="rounded-xl p-4 mb-5" style={{background:'white', border:'2px solid '+GOLD_ACCENT}}>
+          <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>New Cleanup Item</div>
+          <div className="grid grid-cols-5 gap-3">
+            <div className="col-span-2">
+              <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Label</label>
+              <input value={newItem.label} onChange={e => setNewItem({...newItem, label: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Category</label>
+              <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
+                {CLEANUP_CATEGORIES.filter(c => c !== 'Debt').map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Entity</label>
+              <select value={newItem.entity} onChange={e => setNewItem({...newItem, entity: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
+                {DEBT_ENTITIES.map(e => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Amount</label>
+              <input type="number" value={newItem.amount} onChange={e => setNewItem({...newItem, amount: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+            <div className="col-span-5">
+              <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Notes</label>
+              <textarea value={newItem.notes} onChange={e => setNewItem({...newItem, notes: e.target.value})} rows={2} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
+            </div>
+          </div>
+          <button onClick={addItem} className="mt-3 px-4 py-1.5 rounded text-xs font-semibold text-white" style={{background: NAVY}}>Add</button>
+        </div>
+      )}
+
+      {/* Summary */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="rounded-xl p-4" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Total Cleanup</div>
+          <div className="text-2xl font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.total)}</div>
+          <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>{allRows.length} items</div>
+        </div>
+        <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #f5c6c6'}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Pending</div>
+          <div className="text-2xl font-bold" style={{color:'#b5282a'}}>{fmtNum(totals.pending)}</div>
+          <div className="text-xs mt-1" style={{color:'#8899aa'}}>{allRows.filter(r => !r.resolved).length} items</div>
+        </div>
+        <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #9dd4b5'}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Resolved</div>
+          <div className="text-2xl font-bold" style={{color:'#1a6b3a'}}>{fmtNum(totals.resolved)}</div>
+          <div className="text-xs mt-1" style={{color:'#8899aa'}}>{allRows.filter(r => r.resolved).length} items</div>
+        </div>
+        <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>By Category</div>
+          <div className="space-y-0.5 text-xs">
+            {CLEANUP_CATEGORIES.map(c => totals.byCategory[c] > 0 && (
+              <div key={c} className="flex justify-between">
+                <span style={{color:'#445566'}}>{c}</span>
+                <strong style={{color: NAVY}}>{fmtNum(totals.byCategory[c])}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <table className="w-full text-xs">
+          <thead><tr style={{background: NAVY, color:'white'}}>
+            <th className="text-center px-2 py-2 font-semibold">Resolved</th>
+            <th className="text-left px-3 py-2 font-semibold">Item</th>
+            <th className="text-left px-3 py-2 font-semibold">Category</th>
+            <th className="text-left px-3 py-2 font-semibold">Entity</th>
+            <th className="text-right px-3 py-2 font-semibold">Amount</th>
+            <th className="text-left px-3 py-2 font-semibold">Notes</th>
+            <th className="text-center px-2 py-2 font-semibold">Actions</th>
+          </tr></thead>
+          <tbody>
+            {allRows.map(r => {
+              const isEditing = editingId === r.id;
+              return (
+                <tr key={r.id} style={{borderBottom:'1px solid #f0f4f8', textDecoration: r.resolved ? 'line-through' : 'none', opacity: r.resolved ? 0.6 : 1}}>
+                  <td className="px-2 py-2 text-center">
+                    <input type="checkbox" checked={r.resolved} onChange={() => toggleResolved(r)} title={r.resolved ? 'Mark unresolved' : 'Mark resolved'} />
+                  </td>
+                  <td className="px-3 py-2 font-semibold" style={{color: NAVY}}>
+                    {isEditing ? <input value={editForm.label} onChange={e => setEditForm({...editForm, label: e.target.value})} className="w-full text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color: NAVY}} /> : r.label}
+                  </td>
+                  <td className="px-3 py-2" style={{color:'#445566'}}>
+                    {isEditing ? (
+                      <select value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} className="text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color: NAVY}}>
+                        {CLEANUP_CATEGORIES.filter(c => c !== 'Debt').map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 rounded" style={{
+                        background: r.category === 'Debt' ? '#edf6fb' : r.category === 'Litigation' ? '#fef2f2' : r.category === 'Payables' ? '#fef3c7' : '#f7f9fc',
+                        color: r.category === 'Debt' ? '#1a6b8a' : r.category === 'Litigation' ? '#b5282a' : r.category === 'Payables' ? '#8a5c1a' : '#445566',
+                      }}>{r.category}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2" style={{color:'#445566'}}>
+                    {isEditing ? (
+                      <select value={editForm.entity} onChange={e => setEditForm({...editForm, entity: e.target.value})} className="text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color: NAVY}}>
+                        {DEBT_ENTITIES.map(e => <option key={e} value={e}>{e}</option>)}
+                      </select>
+                    ) : r.entity}
+                  </td>
+                  <td className="px-3 py-2 text-right font-bold" style={{color: NAVY}}>
+                    {isEditing ? <input type="number" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: e.target.value})} className="w-24 text-xs rounded border px-1 py-0.5 text-right" style={{borderColor:'#dde4ed', color: NAVY}} /> : fmtNum(r.amount)}
+                  </td>
+                  <td className="px-3 py-2 text-xs" style={{color:'#6b7a99', maxWidth: 400}}>
+                    {isEditing ? <textarea value={editForm.notes} onChange={e => setEditForm({...editForm, notes: e.target.value})} rows={2} className="w-full text-xs rounded border px-1 py-0.5" style={{borderColor:'#dde4ed', color: NAVY}} /> : (r.notes ? <span title={r.notes}>{r.notes.length > 80 ? r.notes.slice(0, 80) + '…' : r.notes}</span> : '—')}
+                  </td>
+                  <td className="px-2 py-2 text-center">
+                    {r.isDebt ? (
+                      <span className="text-xs" style={{color:'#8899aa'}}>(debt)</span>
+                    ) : isEditing ? (
+                      <div className="flex gap-1 justify-center">
+                        <button onClick={saveEdit} className="text-xs px-1.5 py-0.5 rounded" style={{background:'#1a6b3a', color:'white'}}>Save</button>
+                        <button onClick={() => { setEditingId(null); setEditForm(null); }} className="text-xs px-1.5 py-0.5 rounded" style={{background:'#6b7a99', color:'white'}}>×</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1 justify-center">
+                        <button onClick={() => startEdit(r)} className="text-xs px-1.5 py-0.5 rounded" style={{background:'#fdf8ec', color:'#8a5c1a', border:'1px solid #e8d38a'}}>Edit</button>
+                        <button onClick={() => deleteItem(r.id)} className="text-xs px-1.5 py-0.5 rounded" style={{background:'#fef2f2', color:'#b5282a', border:'1px solid #f5c6c6'}}>Del</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
+              <td colSpan={4} className="px-3 py-2 font-bold">Total Cleanup</td>
+              <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.total)}</td>
+              <td colSpan={2}></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="text-xs mt-3" style={{color:'#8899aa'}}>
+        Cleanup-flagged debts are pulled from the Debt Schedule. Mark a debt as inactive there to mark it resolved here. Litigation, payables, and other items can be added manually.
+      </div>
+    </div>
+  );
+}
+
 function DebtScheduleTab() {
   const [debts, setDebts] = useState(() => {
     const seed = DEBT_SEED.map(d => ({ active: d.active !== false, ...d, active: d.active !== false }));
@@ -3722,7 +3978,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['hos','HoS Income'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['debt','Debt Schedule'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
+        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['hos','HoS Income'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['debt','Debt Schedule'],['cleanup','Cleanup'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -3734,7 +3990,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {!['modeler','overview','recruit','income','hos','compare','board','debt','roadmap'].includes(tab) && (
+        {!['modeler','overview','recruit','income','hos','compare','board','debt','cleanup','roadmap'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -4266,6 +4522,10 @@ export default function Dashboard() {
 
           {tab === 'debt' && (
             <DebtScheduleTab />
+          )}
+
+          {tab === 'cleanup' && (
+            <CleanupTab />
           )}
 
           {/* ROADMAP */}
