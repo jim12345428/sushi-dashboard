@@ -2145,7 +2145,7 @@ td.bold { font-weight: bold; }
 const DEBT_ENTITIES = ['Fish Island', '5th Ave BK', 'NEF'];
 const DEBT_SEED = [
   { id: 'd1', lender: '2500HD Van', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 995, notes: '', docFile: '' },
-  { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Island', cleanup: false, active: false, originalAmount: 800000, originationDate: '2025-10-21', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 350000, notes: 'FULLY CONVERTED to 16% Class B Membership Interest on 1/5/2026 per Note Conversion Agreement. Notes cancelled — BS balance of $350K should be $0; $450K reclass to equity needed.', docFile: '' },
+  { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Island', cleanup: false, active: false, originalAmount: 800000, originationDate: '2025-10-16', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 350000, notes: 'FULLY CONVERTED to 16% Class B Membership Interest in Fish Company Management, LLC on 1/5/2026 per Note Conversion Agreement (DocuSign F45BF3E7-D5CA-40F6-A35F-9BA4CC7BF840).\n\nUnderlying $800k aggregate notes cancelled:\n  • $300k Promissory Note dated 10/16/2025\n  • $150k Promissory Note dated 10/31/2025\n  • $150k Senior Secured Note dated 11/12/2025\n  • $200k Senior Secured Promissory Note dated 11/19/2025\n\nInvestor: Fish Acquisition Partners LLC (Maxwell Capital Group LLC, Managing Member — Alex Weiss). Company signatory: James Thistle, Manager. Governed by Delaware law.\n\nNotes cancelled — BS balance of $350K should be $0; $450K reclass to equity needed.', docFile: 'acquisition-partners-note-conversion.pdf' },
   { id: 'd3', lender: 'Kabbage Loan (Amex) / American Express Loan', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 32567, notes: '', docFile: '' },
   { id: 'd4', lender: 'WRB Real Estate Group LLC', entity: 'Fish Island', cleanup: false, originalAmount: 300000, originationDate: '2025-12-10', maturityDate: '2026-01-04', interestRate: 0.12, termMonths: null, monthlyPayment: 3000, balance: 300000, notes: 'Debtor: Fish Island LLC. Lender: WRB Real Estate Group LLC. Subordinated; secured by guarantees from Fish Co Mgmt, Northeast Fish Co, 5th Ave Brooklyn, and James Thistle. Interest-only monthly starting 11/1/2025; principal+accrued due on demand from 1/4/2026.', docFile: '' },
   { id: 'd5', lender: 'Newtek Bank SBA Loan #2742643', entity: 'Fish Island', cleanup: false, originalAmount: 2250000, originationDate: '2025-04-10', maturityDate: '2035-04-02', interestRate: null, termMonths: 120, monthlyPayment: null, balance: 2506990, notes: 'SBA loan. Borrowers: Fish Island LLC + 5th Ave Brooklyn LLC (joint & several). Guarantors: Northeast Fish Co (unlimited), Fish Co Mgmt (unlimited), Fish Acquisition Partners (unlimited), Sea Company (unlimited), James Thistle (unlimited), Dana Thistle (limited). Newtek Bank depository required for ACH. NOTE: BS balance $2,510,447 exceeds original $2,250,000 — likely includes accrued interest, fees, or this is a separate facility.', docFile: '' },
@@ -2482,8 +2482,13 @@ function DebtScheduleTab() {
       const v = localStorage.getItem('debt_schedule');
       if (!v) return seed;
       const parsed = JSON.parse(v);
-      // Migrate legacy records: missing `active` → default true
-      return parsed.map(d => ({ ...d, active: d.active === undefined ? true : d.active }));
+      // Migrate legacy records
+      return parsed.map(d => {
+        const out = { ...d, active: d.active === undefined ? true : d.active };
+        // Auto-link Acquisition Partners doc if not yet referenced
+        if (d.id === 'd2' && !d.docFile) out.docFile = 'acquisition-partners-note-conversion.pdf';
+        return out;
+      });
     } catch { return seed; }
   });
   const [selected, setSelected] = useState(null);
