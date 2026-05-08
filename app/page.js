@@ -2143,23 +2143,43 @@ td.bold { font-weight: bold; }
 /* ── HEAD OF SUSHI INCOME TAB ── */
 /* ── DEBT SCHEDULE TAB ── */
 const DEBT_ENTITIES = ['Fish Island', '5th Ave BK', 'NEF'];
+const DEBT_TYPES = ['Term Loan', 'SBA Loan', 'LOC', 'Demand Note', 'Promissory Note', 'Convertible Note', 'Vehicle Loan', 'Credit Card', 'Merchant Cash Advance', 'Other'];
+const DEBT_TYPE_COLORS = {
+  'Term Loan': { bg:'#f0f4f8', fg:'#445566', border:'#cbd5e0' },
+  'SBA Loan': { bg:'#edf6fb', fg:'#1a6b8a', border:'#b3d9eb' },
+  'LOC': { bg:'#edfaf2', fg:'#1a6b3a', border:'#9dd4b5' },
+  'Demand Note': { bg:'#fef2f2', fg:'#b5282a', border:'#f5c6c6' },
+  'Promissory Note': { bg:'#fdf8ec', fg:'#8a5c1a', border:'#e8d38a' },
+  'Convertible Note': { bg:'#f3e8ff', fg:'#6b21a8', border:'#d8b4fe' },
+  'Vehicle Loan': { bg:'#ecfeff', fg:'#0e7490', border:'#a5e6f0' },
+  'Credit Card': { bg:'#fff1f2', fg:'#9f1239', border:'#fecdd3' },
+  'Merchant Cash Advance': { bg:'#fff7ed', fg:'#9a3412', border:'#fed7aa' },
+  'Other': { bg:'#f7f9fc', fg:'#445566', border:'#dde4ed' },
+};
+function debtTypeColor(t) { return DEBT_TYPE_COLORS[t] || DEBT_TYPE_COLORS['Other']; }
+const DEBT_TYPE_BY_ID = {
+  d1: 'Vehicle Loan', d2: 'Convertible Note', d3: 'Merchant Cash Advance', d4: 'Demand Note',
+  d5: 'SBA Loan', d6: 'Promissory Note', d7: 'Promissory Note', d8: 'Promissory Note',
+  d9: 'Demand Note', d10: 'LOC', d11: 'SBA Loan', d12: 'Vehicle Loan', d13: 'Vehicle Loan',
+  d14: 'Vehicle Loan', d15: 'Other', d16: 'Credit Card',
+};
 const DEBT_SEED = [
-  { id: 'd1', lender: '2500HD Van', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 995, notes: '', docFile: '' },
-  { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Island', cleanup: false, active: false, originalAmount: 800000, originationDate: '2025-10-16', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 350000, notes: 'FULLY CONVERTED to 16% Class B Membership Interest in Fish Company Management, LLC on 1/5/2026 per Note Conversion Agreement (DocuSign F45BF3E7-D5CA-40F6-A35F-9BA4CC7BF840).\n\nUnderlying $800k aggregate notes cancelled:\n  • $300k Promissory Note dated 10/16/2025\n  • $150k Promissory Note dated 10/31/2025\n  • $150k Senior Secured Note dated 11/12/2025\n  • $200k Senior Secured Promissory Note dated 11/19/2025\n\nInvestor: Fish Acquisition Partners LLC (Maxwell Capital Group LLC, Managing Member — Alex Weiss). Company signatory: James Thistle, Manager. Governed by Delaware law.\n\nNotes cancelled — BS balance of $350K should be $0; $450K reclass to equity needed.', docFile: 'acquisition-partners-note-conversion.pdf' },
-  { id: 'd3', lender: 'Kabbage Loan (Amex) / American Express Loan', entity: 'Fish Island', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 32567, notes: '', docFile: '' },
-  { id: 'd4', lender: 'WRB Real Estate Group LLC', entity: 'Fish Island', cleanup: false, originalAmount: 300000, originationDate: '2025-12-10', maturityDate: '2026-01-04', interestRate: 0.12, termMonths: null, monthlyPayment: 3000, balance: 300000, notes: 'Debtor: Fish Island LLC. Lender: WRB Real Estate Group LLC. Subordinated; secured by guarantees from Fish Co Mgmt, Northeast Fish Co, 5th Ave Brooklyn, and James Thistle. Interest-only monthly starting 11/1/2025; principal+accrued due on demand from 1/4/2026.', docFile: '' },
-  { id: 'd5', lender: 'Newtek Bank SBA Loan #2742643', entity: 'Fish Island', cleanup: false, originalAmount: 2250000, originationDate: '2025-04-10', maturityDate: '2035-04-02', interestRate: null, termMonths: 120, monthlyPayment: null, balance: 2506990, notes: 'SBA loan. Borrowers: Fish Island LLC + 5th Ave Brooklyn LLC (joint & several). Guarantors: Northeast Fish Co (unlimited), Fish Co Mgmt (unlimited), Fish Acquisition Partners (unlimited), Sea Company (unlimited), James Thistle (unlimited), Dana Thistle (limited). Newtek Bank depository required for ACH. NOTE: BS balance $2,510,447 exceeds original $2,250,000 — likely includes accrued interest, fees, or this is a separate facility.', docFile: '' },
-  { id: 'd6', lender: 'Notes Payable', entity: 'Fish Island', cleanup: false, originalAmount: 100000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 100000, notes: '', docFile: '' },
-  { id: 'd7', lender: 'Oren Sauberman - $250K Note (Fish Co Mgmt)', entity: 'Fish Island', cleanup: false, originalAmount: 250000, originationDate: '2024-11-13', maturityDate: '2026-11-13', interestRate: 0.10, termMonths: null, monthlyPayment: 6250, balance: 250000, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Island, Northeast Fish, 5th Ave Brooklyn + 1st priority pledge of Debtor’s MIs in Guarantors and SeaCo’s MIs in Debtor. Quarterly interest in arrears; principal balloon at 11/13/2026 maturity. 15% default rate. Cross-default with $568K note. Use of proceeds: SBA repayment, legal/consulting fees, working capital.', docFile: '' },
-  { id: 'd8', lender: 'Oren Sauberman - $568K Note (Fish Co Mgmt)', entity: 'Fish Island', cleanup: false, originalAmount: 568000, originationDate: '2024-11-13', maturityDate: '2031-11-22', interestRate: 0.075, termMonths: 84, monthlyPayment: null, balance: 353875, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Same security package as $250K note. Interest 7.50% PIK first 24 months (capitalized monthly, 30/360). From 11/1/2026: monthly cash P&I, 5-yr amort. Balloon at 11/13/2031. 15% default rate. Cross-default with $250K note.', docFile: '' },
-  { id: 'd9', lender: 'Oren Sauberman - $186K Note (Northeast Fish)', entity: 'Fish Island', cleanup: false, originalAmount: 186000, originationDate: '2025-04-03', maturityDate: '2025-04-30', interestRate: 0.11, termMonths: null, monthlyPayment: 1705, balance: 186000, notes: 'Debtor: Northeast Fish Co LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Co Mgmt (Parent), Fish Island, 5th Ave Brooklyn + 2nd priority pledge of Parent’s MIs in Guarantors and SeaCo’s MIs in Parent. Maturity earlier of 4/30/2025 OR closing of new senior debt. Note: Newtek SBA closed 4/10/2025 - may have triggered maturity.', docFile: '' },
-  { id: 'd10', lender: 'Newtek Bank Line of Credit ($500K)', entity: 'Fish Island', cleanup: false, originalAmount: 500000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 66287, notes: 'Newtek Bank revolving line of credit. $500K commitment; current draw $66,287 per BS (1/31/2026) = $433,713 available. Need LOC agreement for rate, term, and covenants.', docFile: '' },
-  { id: 'd11', lender: 'Wells Fargo SBA Loan - 5th Ave Brooklyn', entity: '5th Ave BK', cleanup: false, originalAmount: 483000, originationDate: '2019-03-06', maturityDate: '2029-03-02', interestRate: 0.067, termMonths: 120, monthlyPayment: 5967.70, balance: 0, notes: 'Borrower: 5th Ave Brooklyn, LLC. Collateral: inventory, chattel paper, accounts, equipment, general intangibles, fixtures (Commercial Security Agreement 3/6/2019). Loan #711849860.', docFile: '' },
-  { id: 'd12', lender: 'First Citizens - 2x RAM 2500 ProMaster (Veh #1, #2)', entity: 'NEF', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 165597, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG5PE542063, 3C6LRVVG4PE542474). Branded Fjord. Combined payoff $165,597; expected sale value $120,000; net equity ($45,597).', docFile: '' },
-  { id: 'd13', lender: 'Ameris (Balboa) - 2x RAM 2500 ProMaster (Veh #3, #4)', entity: 'NEF', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 160000, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG1PE562519, 3C6LRVVG3PE533006). Combined payoff $160,000; expected sale value $120,000; net equity ($40,000).', docFile: '' },
-  { id: 'd14', lender: 'Bank of Montreal - 2x GMC Savana (Veh #5, #6)', entity: 'NEF', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 140000, notes: '2x 2025 GMC Savana (VINs 1GTZ7HF78S1257927, 1GTZ7HF78S1257846). Combined payoff $140,000; expected sale value $118,000; net equity ($22,000).', docFile: '' },
-  { id: 'd15', lender: 'Peter Stathakos', entity: 'Fish Island', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
-  { id: 'd16', lender: 'Credit Card', entity: 'Fish Island', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
+  { id: 'd1', lender: '2500HD Van', entity: 'Fish Island', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 995, notes: '', docFile: '' },
+  { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Island', debtType: 'Convertible Note', cleanup: false, active: false, originalAmount: 800000, originationDate: '2025-10-16', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 350000, notes: 'FULLY CONVERTED to 16% Class B Membership Interest in Fish Company Management, LLC on 1/5/2026 per Note Conversion Agreement (DocuSign F45BF3E7-D5CA-40F6-A35F-9BA4CC7BF840).\n\nUnderlying $800k aggregate notes cancelled:\n  • $300k Promissory Note dated 10/16/2025\n  • $150k Promissory Note dated 10/31/2025\n  • $150k Senior Secured Note dated 11/12/2025\n  • $200k Senior Secured Promissory Note dated 11/19/2025\n\nInvestor: Fish Acquisition Partners LLC (Maxwell Capital Group LLC, Managing Member — Alex Weiss). Company signatory: James Thistle, Manager. Governed by Delaware law.\n\nNotes cancelled — BS balance of $350K should be $0; $450K reclass to equity needed.', docFile: 'acquisition-partners-note-conversion.pdf' },
+  { id: 'd3', lender: 'Kabbage Loan (Amex) / American Express Loan', entity: 'Fish Island', debtType: 'Merchant Cash Advance', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 32567, notes: '', docFile: '' },
+  { id: 'd4', lender: 'WRB Real Estate Group LLC', entity: 'Fish Island', debtType: 'Demand Note', cleanup: false, originalAmount: 300000, originationDate: '2025-12-10', maturityDate: '2026-01-04', interestRate: 0.12, termMonths: null, monthlyPayment: 3000, balance: 300000, notes: 'Debtor: Fish Island LLC. Lender: WRB Real Estate Group LLC. Subordinated; secured by guarantees from Fish Co Mgmt, Northeast Fish Co, 5th Ave Brooklyn, and James Thistle. Interest-only monthly starting 11/1/2025; principal+accrued due on demand from 1/4/2026.', docFile: '' },
+  { id: 'd5', lender: 'Newtek Bank SBA Loan #2742643', entity: 'Fish Island', debtType: 'SBA Loan', cleanup: false, originalAmount: 2250000, originationDate: '2025-04-10', maturityDate: '2035-04-02', interestRate: null, termMonths: 120, monthlyPayment: null, balance: 2506990, notes: 'SBA loan. Borrowers: Fish Island LLC + 5th Ave Brooklyn LLC (joint & several). Guarantors: Northeast Fish Co (unlimited), Fish Co Mgmt (unlimited), Fish Acquisition Partners (unlimited), Sea Company (unlimited), James Thistle (unlimited), Dana Thistle (limited). Newtek Bank depository required for ACH. NOTE: BS balance $2,510,447 exceeds original $2,250,000 — likely includes accrued interest, fees, or this is a separate facility.', docFile: '' },
+  { id: 'd6', lender: 'Notes Payable', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 100000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 100000, notes: '', docFile: '' },
+  { id: 'd7', lender: 'Oren Sauberman - $250K Note (Fish Co Mgmt)', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 250000, originationDate: '2024-11-13', maturityDate: '2026-11-13', interestRate: 0.10, termMonths: null, monthlyPayment: 6250, balance: 250000, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Island, Northeast Fish, 5th Ave Brooklyn + 1st priority pledge of Debtor’s MIs in Guarantors and SeaCo’s MIs in Debtor. Quarterly interest in arrears; principal balloon at 11/13/2026 maturity. 15% default rate. Cross-default with $568K note. Use of proceeds: SBA repayment, legal/consulting fees, working capital.', docFile: '' },
+  { id: 'd8', lender: 'Oren Sauberman - $568K Note (Fish Co Mgmt)', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 568000, originationDate: '2024-11-13', maturityDate: '2031-11-22', interestRate: 0.075, termMonths: 84, monthlyPayment: null, balance: 353875, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Same security package as $250K note. Interest 7.50% PIK first 24 months (capitalized monthly, 30/360). From 11/1/2026: monthly cash P&I, 5-yr amort. Balloon at 11/13/2031. 15% default rate. Cross-default with $250K note.', docFile: '' },
+  { id: 'd9', lender: 'Oren Sauberman - $186K Note (Northeast Fish)', entity: 'Fish Island', debtType: 'Demand Note', cleanup: false, originalAmount: 186000, originationDate: '2025-04-03', maturityDate: '2025-04-30', interestRate: 0.11, termMonths: null, monthlyPayment: 1705, balance: 186000, notes: 'Debtor: Northeast Fish Co LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Co Mgmt (Parent), Fish Island, 5th Ave Brooklyn + 2nd priority pledge of Parent’s MIs in Guarantors and SeaCo’s MIs in Parent. Maturity earlier of 4/30/2025 OR closing of new senior debt. Note: Newtek SBA closed 4/10/2025 - may have triggered maturity.', docFile: '' },
+  { id: 'd10', lender: 'Newtek Bank Line of Credit ($500K)', entity: 'Fish Island', debtType: 'LOC', cleanup: false, originalAmount: 500000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 66287, notes: 'Newtek Bank revolving line of credit. $500K commitment; current draw $66,287 per BS (1/31/2026) = $433,713 available. Need LOC agreement for rate, term, and covenants.', docFile: '' },
+  { id: 'd11', lender: 'Wells Fargo SBA Loan - 5th Ave Brooklyn', entity: '5th Ave BK', debtType: 'SBA Loan', cleanup: false, originalAmount: 483000, originationDate: '2019-03-06', maturityDate: '2029-03-02', interestRate: 0.067, termMonths: 120, monthlyPayment: 5967.70, balance: 0, notes: 'Borrower: 5th Ave Brooklyn, LLC. Collateral: inventory, chattel paper, accounts, equipment, general intangibles, fixtures (Commercial Security Agreement 3/6/2019). Loan #711849860.', docFile: '' },
+  { id: 'd12', lender: 'First Citizens - 2x RAM 2500 ProMaster (Veh #1, #2)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 165597, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG5PE542063, 3C6LRVVG4PE542474). Branded Fjord. Combined payoff $165,597; expected sale value $120,000; net equity ($45,597).', docFile: '' },
+  { id: 'd13', lender: 'Ameris (Balboa) - 2x RAM 2500 ProMaster (Veh #3, #4)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 160000, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG1PE562519, 3C6LRVVG3PE533006). Combined payoff $160,000; expected sale value $120,000; net equity ($40,000).', docFile: '' },
+  { id: 'd14', lender: 'Bank of Montreal - 2x GMC Savana (Veh #5, #6)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 140000, notes: '2x 2025 GMC Savana (VINs 1GTZ7HF78S1257927, 1GTZ7HF78S1257846). Combined payoff $140,000; expected sale value $118,000; net equity ($22,000).', docFile: '' },
+  { id: 'd15', lender: 'Peter Stathakos', entity: 'Fish Island', debtType: 'Other', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
+  { id: 'd16', lender: 'Credit Card', entity: 'Fish Island', debtType: 'Credit Card', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
 ];
 
 /* ── CLEANUP TAB ── */
@@ -2487,12 +2507,15 @@ function DebtScheduleTab() {
         const out = { ...d, active: d.active === undefined ? true : d.active };
         // Auto-link Acquisition Partners doc if not yet referenced
         if (d.id === 'd2' && !d.docFile) out.docFile = 'acquisition-partners-note-conversion.pdf';
+        // Auto-populate debtType using the seed lookup
+        if (!d.debtType) out.debtType = DEBT_TYPE_BY_ID[d.id] || 'Other';
         return out;
       });
     } catch { return seed; }
   });
   const [selected, setSelected] = useState(null);
   const [filterEntity, setFilterEntity] = useState('All');
+  const [filterType, setFilterType] = useState('All');
   const [showCleanupOnly, setShowCleanupOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState('Active'); // Active | Inactive | All
   const [editing, setEditing] = useState(false);
@@ -2504,12 +2527,13 @@ function DebtScheduleTab() {
   const filtered = useMemo(() => {
     return debts.filter(d => {
       if (filterEntity !== 'All' && d.entity !== filterEntity) return false;
+      if (filterType !== 'All' && (d.debtType || 'Other') !== filterType) return false;
       if (showCleanupOnly && !d.cleanup) return false;
       if (statusFilter === 'Active' && !d.active) return false;
       if (statusFilter === 'Inactive' && d.active) return false;
       return true;
     });
-  }, [debts, filterEntity, showCleanupOnly, statusFilter]);
+  }, [debts, filterEntity, filterType, showCleanupOnly, statusFilter]);
 
   // Totals only include ACTIVE debts (regardless of current filter view)
   const totals = useMemo(() => {
@@ -2545,7 +2569,7 @@ function DebtScheduleTab() {
   function addNewDebt() {
     const newDebt = {
       id: 'd' + Date.now(),
-      lender: '', entity: 'Fish Island', cleanup: false, active: true,
+      lender: '', entity: 'Fish Island', debtType: 'Term Loan', cleanup: false, active: true,
       originalAmount: null, originationDate: '', maturityDate: '',
       interestRate: null, termMonths: null, monthlyPayment: null,
       balance: 0, notes: '', docFile: '',
@@ -2598,6 +2622,11 @@ function DebtScheduleTab() {
           <option value="All">All</option>
           {DEBT_ENTITIES.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
+        <span className="text-xs font-semibold ml-3" style={{color:'#6b7a99'}}>Type:</span>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
+          <option value="All">All</option>
+          {DEBT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
         <label className="flex items-center gap-1 text-xs cursor-pointer ml-3" style={{color:'#445566'}}>
           <input type="checkbox" checked={showCleanupOnly} onChange={e => setShowCleanupOnly(e.target.checked)} />
           Show cleanup-flagged only
@@ -2613,6 +2642,7 @@ function DebtScheduleTab() {
           <thead><tr style={{background: NAVY, color:'white'}}>
             <th className="text-center px-2 py-2 font-semibold">Status</th>
             <th className="text-left px-3 py-2 font-semibold">Lender / Loan</th>
+            <th className="text-left px-3 py-2 font-semibold">Type</th>
             <th className="text-left px-3 py-2 font-semibold">Entity</th>
             <th className="text-center px-2 py-2 font-semibold">Cleanup</th>
             <th className="text-right px-3 py-2 font-semibold">Original</th>
@@ -2636,6 +2666,13 @@ function DebtScheduleTab() {
                     <input type="checkbox" checked={d.active} onClick={e => e.stopPropagation()} onChange={e => setDebts(prev => prev.map(x => x.id === d.id ? {...x, active: e.target.checked} : x))} title={d.active ? 'Active — uncheck to mark inactive' : 'Inactive — check to mark active'} />
                   </td>
                   <td className="px-3 py-2 font-semibold" style={{color: navyColor}}>{d.lender}</td>
+                  <td className="px-3 py-2">
+                    {(() => {
+                      const dt = d.debtType || 'Other';
+                      const tc = debtTypeColor(dt);
+                      return <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{background: tc.bg, color: tc.fg, border:'1px solid '+tc.border}}>{dt}</span>;
+                    })()}
+                  </td>
                   <td className="px-3 py-2" style={{color: txtColor}}>{d.entity}</td>
                   <td className="px-2 py-2 text-center">{d.cleanup && <span className="text-xs px-1.5 py-0.5 rounded" style={{background:'#fef3c7', color:'#8a5c1a', border:'1px solid #e8d38a'}}>Y</span>}</td>
                   <td className="px-3 py-2 text-right" style={{color: txtColor}}>{fmtNum(d.originalAmount)}</td>
@@ -2651,9 +2688,9 @@ function DebtScheduleTab() {
               );
             })}
             <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
-              <td className="px-3 py-2 font-bold" colSpan={10}>Total {filterEntity !== 'All' ? '(' + filterEntity + ')' : 'Long-Term Debt'} {statusFilter !== 'All' ? '— ' + statusFilter : ''}</td>
+              <td className="px-3 py-2 font-bold" colSpan={11}>Total {filterEntity !== 'All' ? '(' + filterEntity + ')' : 'Long-Term Debt'} {statusFilter !== 'All' ? '— ' + statusFilter : ''}{filterType !== 'All' ? ' — ' + filterType : ''}</td>
               <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(filtered.reduce((s, d) => s + (d.balance || 0), 0))}</td>
-              <td className="px-2 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{statusFilter === 'Active' ? '100.0%' : '—'}</td>
+              <td className="px-2 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{statusFilter === 'Active' && filterType === 'All' && filterEntity === 'All' ? '100.0%' : '—'}</td>
               <td></td>
             </tr>
           </tbody>
@@ -2685,6 +2722,7 @@ function DebtScheduleTab() {
                 {!editing ? (
                   <div className="space-y-3 text-xs">
                     <DetailRow label="Lender / Loan" value={selected.lender} />
+                    <DetailRow label="Type" value={selected.debtType || 'Other'} />
                     <DetailRow label="Entity" value={selected.entity} />
                     <DetailRow label="Status" value={selected.active ? 'Active' : 'Inactive'} bold />
                     <DetailRow label="Cleanup Required" value={selected.cleanup ? 'Yes' : 'No'} />
@@ -2706,6 +2744,7 @@ function DebtScheduleTab() {
                 ) : (
                   <div className="space-y-3 text-xs">
                     <FormField label="Lender / Loan" value={editForm.lender} onChange={v => setEditForm({...editForm, lender: v})} />
+                    <FormSelect label="Type" value={editForm.debtType || 'Other'} onChange={v => setEditForm({...editForm, debtType: v})} options={DEBT_TYPES} />
                     <FormSelect label="Entity" value={editForm.entity} onChange={v => setEditForm({...editForm, entity: v})} options={DEBT_ENTITIES} />
                     <FormCheckbox label="Active (uncheck if paid off, converted, or otherwise inactive)" value={editForm.active} onChange={v => setEditForm({...editForm, active: v})} />
                     <FormCheckbox label="Cleanup Required" value={editForm.cleanup} onChange={v => setEditForm({...editForm, cleanup: v})} />
