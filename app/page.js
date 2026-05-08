@@ -2160,8 +2160,8 @@ function debtTypeColor(t) { return DEBT_TYPE_COLORS[t] || DEBT_TYPE_COLORS['Othe
 const DEBT_TYPE_BY_ID = {
   d1: 'Vehicle Loan', d2: 'Convertible Note', d3: 'Merchant Cash Advance', d4: 'Demand Note',
   d5: 'SBA Loan', d6: 'Promissory Note', d7: 'Promissory Note', d8: 'Promissory Note',
-  d9: 'Demand Note', d10: 'LOC', d11: 'SBA Loan', d12: 'Vehicle Loan', d13: 'Vehicle Loan',
-  d14: 'Vehicle Loan', d15: 'Other', d16: 'Credit Card',
+  d10: 'LOC', d11: 'SBA Loan', d12: 'Vehicle Loan', d13: 'Vehicle Loan',
+  d14: 'Vehicle Loan',
 };
 const DEBT_SEED = [
   { id: 'd1', lender: '2500HD Van', entity: 'Fish Island', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 995, notes: '', docFile: '' },
@@ -2172,15 +2172,13 @@ const DEBT_SEED = [
   { id: 'd6', lender: 'Notes Payable', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 100000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 100000, notes: '', docFile: '' },
   { id: 'd7', lender: 'Oren Sauberman - $250K Note (Fish Co Mgmt)', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 250000, originationDate: '2024-11-13', maturityDate: '2026-11-13', interestRate: 0.10, termMonths: null, monthlyPayment: 6250, balance: 250000, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Island, Northeast Fish, 5th Ave Brooklyn + 1st priority pledge of Debtor’s MIs in Guarantors and SeaCo’s MIs in Debtor. Quarterly interest in arrears; principal balloon at 11/13/2026 maturity. 15% default rate. Cross-default with $568K note. Use of proceeds: SBA repayment, legal/consulting fees, working capital.', docFile: '' },
   { id: 'd8', lender: 'Oren Sauberman - $568K Note (Fish Co Mgmt)', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 568000, originationDate: '2024-11-13', maturityDate: '2031-11-22', interestRate: 0.075, termMonths: 84, monthlyPayment: null, balance: 353875, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Same security package as $250K note. Interest 7.50% PIK first 24 months (capitalized monthly, 30/360). From 11/1/2026: monthly cash P&I, 5-yr amort. Balloon at 11/13/2031. 15% default rate. Cross-default with $250K note.', docFile: '' },
-  { id: 'd9', lender: 'Oren Sauberman - $186K Note (Northeast Fish)', entity: 'Fish Island', debtType: 'Demand Note', cleanup: false, originalAmount: 186000, originationDate: '2025-04-03', maturityDate: '2025-04-30', interestRate: 0.11, termMonths: null, monthlyPayment: 1705, balance: 186000, notes: 'Debtor: Northeast Fish Co LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Co Mgmt (Parent), Fish Island, 5th Ave Brooklyn + 2nd priority pledge of Parent’s MIs in Guarantors and SeaCo’s MIs in Parent. Maturity earlier of 4/30/2025 OR closing of new senior debt. Note: Newtek SBA closed 4/10/2025 - may have triggered maturity.', docFile: '' },
   { id: 'd10', lender: 'Newtek Bank Line of Credit ($500K)', entity: 'Fish Island', debtType: 'LOC', cleanup: false, originalAmount: 500000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 66287, notes: 'Newtek Bank revolving line of credit. $500K commitment; current draw $66,287 per BS (1/31/2026) = $433,713 available. Need LOC agreement for rate, term, and covenants.', docFile: '' },
   { id: 'd11', lender: 'Wells Fargo SBA Loan - 5th Ave Brooklyn', entity: '5th Ave BK', debtType: 'SBA Loan', cleanup: false, originalAmount: 483000, originationDate: '2019-03-06', maturityDate: '2029-03-02', interestRate: 0.067, termMonths: 120, monthlyPayment: 5967.70, balance: 0, notes: 'Borrower: 5th Ave Brooklyn, LLC. Collateral: inventory, chattel paper, accounts, equipment, general intangibles, fixtures (Commercial Security Agreement 3/6/2019). Loan #711849860.', docFile: '' },
   { id: 'd12', lender: 'First Citizens - 2x RAM 2500 ProMaster (Veh #1, #2)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 165597, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG5PE542063, 3C6LRVVG4PE542474). Branded Fjord. Combined payoff $165,597; expected sale value $120,000; net equity ($45,597).', docFile: '' },
   { id: 'd13', lender: 'Ameris (Balboa) - 2x RAM 2500 ProMaster (Veh #3, #4)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 160000, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG1PE562519, 3C6LRVVG3PE533006). Combined payoff $160,000; expected sale value $120,000; net equity ($40,000).', docFile: '' },
   { id: 'd14', lender: 'Bank of Montreal - 2x GMC Savana (Veh #5, #6)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 140000, notes: '2x 2025 GMC Savana (VINs 1GTZ7HF78S1257927, 1GTZ7HF78S1257846). Combined payoff $140,000; expected sale value $118,000; net equity ($22,000).', docFile: '' },
-  { id: 'd15', lender: 'Peter Stathakos', entity: 'Fish Island', debtType: 'Other', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
-  { id: 'd16', lender: 'Credit Card', entity: 'Fish Island', debtType: 'Credit Card', cleanup: false, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, notes: '', docFile: '' },
 ];
+const REMOVED_DEBT_IDS = new Set(['d9', 'd15', 'd16']);
 
 /* ── CLEANUP TAB ── */
 const CLEANUP_CATEGORIES = ['Debt', 'Litigation', 'Payables', 'Receivable', 'Asset Sale', 'Other'];
@@ -2502,15 +2500,17 @@ function DebtScheduleTab() {
       const v = localStorage.getItem('debt_schedule');
       if (!v) return seed;
       const parsed = JSON.parse(v);
-      // Migrate legacy records
-      return parsed.map(d => {
-        const out = { ...d, active: d.active === undefined ? true : d.active };
-        // Auto-link Acquisition Partners doc if not yet referenced
-        if (d.id === 'd2' && !d.docFile) out.docFile = 'acquisition-partners-note-conversion.pdf';
-        // Auto-populate debtType using the seed lookup
-        if (!d.debtType) out.debtType = DEBT_TYPE_BY_ID[d.id] || 'Other';
-        return out;
-      });
+      // Migrate legacy records — drop removed IDs, fill missing fields
+      return parsed
+        .filter(d => !REMOVED_DEBT_IDS.has(d.id))
+        .map(d => {
+          const out = { ...d, active: d.active === undefined ? true : d.active };
+          // Auto-link Acquisition Partners doc if not yet referenced
+          if (d.id === 'd2' && !d.docFile) out.docFile = 'acquisition-partners-note-conversion.pdf';
+          // Auto-populate debtType using the seed lookup
+          if (!d.debtType) out.debtType = DEBT_TYPE_BY_ID[d.id] || 'Other';
+          return out;
+        });
     } catch { return seed; }
   });
   const [selected, setSelected] = useState(null);
