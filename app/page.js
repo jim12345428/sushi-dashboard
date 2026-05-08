@@ -2774,7 +2774,8 @@ function DebtScheduleTab() {
               );
             })}
             <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
-              <td className="px-3 py-2 font-bold" colSpan={11}>Total {filterEntity !== 'All' ? '(' + filterEntity + ')' : 'Long-Term Debt'} {statusFilter !== 'All' ? '— ' + statusFilter : ''}{filterType !== 'All' ? ' — ' + filterType : ''}</td>
+              <td className="px-3 py-2 font-bold" colSpan={10}>Total {filterEntity !== 'All' ? '(' + filterEntity + ')' : 'Long-Term Debt'} {statusFilter !== 'All' ? '— ' + statusFilter : ''}{filterType !== 'All' ? ' — ' + filterType : ''}</td>
+              <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(filtered.reduce((s, d) => s + (d.monthlyPayment || 0), 0))}</td>
               <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(filtered.reduce((s, d) => s + (d.balance || 0), 0))}</td>
               <td className="px-2 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{statusFilter === 'Active' && filterType === 'All' && filterEntity === 'All' ? '100.0%' : '—'}</td>
               <td></td>
