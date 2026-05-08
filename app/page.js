@@ -2171,12 +2171,12 @@ const DEBT_SEED = [
   { id: 'd6', lender: 'Notes Payable', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 100000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 100000, notes: '', docFiles: [] },
   { id: 'd7', lender: 'Oren Sauberman - $250K Note (Fish Co Mgmt)', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 250000, originationDate: '2024-11-13', maturityDate: '2026-11-13', interestRate: 0.10, termMonths: null, monthlyPayment: 6250, balance: 250000, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Secured by guarantees from Fish Island, Northeast Fish, 5th Ave Brooklyn + 1st priority pledge of Debtor’s MIs in Guarantors and SeaCo’s MIs in Debtor. Quarterly interest in arrears; principal balloon at 11/13/2026 maturity. 15% default rate. Cross-default with $568K note. Use of proceeds: SBA repayment, legal/consulting fees, working capital.', docFiles: [] },
   { id: 'd8', lender: 'Oren Sauberman - $568K Note (Fish Co Mgmt)', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 568000, originationDate: '2024-11-13', maturityDate: '2031-11-22', interestRate: 0.075, termMonths: 84, monthlyPayment: null, balance: 353875, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman. Subordinated. Same security package as $250K note. Interest 7.50% PIK first 24 months (capitalized monthly, 30/360). From 11/1/2026: monthly cash P&I, 5-yr amort. Balloon at 11/13/2031. 15% default rate. Cross-default with $250K note.', docFiles: [] },
-  { id: 'd10', lender: 'Newtek Bank Line of Credit ($500K)', entity: 'Fish Island', debtType: 'LOC', cleanup: false, originalAmount: 500000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 499642.61, notes: 'Newtek Bank revolving line of credit. $500K commitment; current draw $499,642.61 as of 04/15/2026 (running balance after $3,473.40 LOAN ADVANCE, ref #703685778) = ~$357 available. Effectively fully drawn. Need LOC agreement for rate, term, and covenants.', docFiles: [] },
+  { id: 'd10', lender: 'Newtek Bank Line of Credit ($500K)', entity: 'Fish Island', debtType: 'LOC', cleanup: false, originalAmount: 500000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 499642.61, notes: 'Newtek Bank revolving line of credit. $500K commitment; current draw $499,642.61 as of 04/15/2026 (running balance after $3,473.40 LOAN ADVANCE, ref #703685778) = ~$357 available. Effectively fully drawn. Need LOC agreement for rate, term, and covenants.', docFiles: ['newtek-loc-loan-advance-2026-04-15.jpg'] },
   { id: 'd11', lender: 'Wells Fargo SBA Loan - 5th Ave Brooklyn', entity: '5th Ave BK', debtType: 'SBA Loan', cleanup: false, originalAmount: 483000, originationDate: '2019-03-06', maturityDate: '2029-03-02', interestRate: 0.067, termMonths: 120, monthlyPayment: 5967.70, balance: 0, notes: 'Borrower: 5th Ave Brooklyn, LLC. Collateral: inventory, chattel paper, accounts, equipment, general intangibles, fixtures (Commercial Security Agreement 3/6/2019). Loan #711849860.', docFiles: [] },
   { id: 'd12', lender: 'First Citizens - 2x RAM 2500 ProMaster (Veh #1, #2)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 165597, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG5PE542063, 3C6LRVVG4PE542474). Branded Fjord. Combined payoff $165,597; expected sale value $120,000; net equity ($45,597).', docFiles: [] },
   { id: 'd13', lender: 'Ameris (Balboa) - 2x RAM 2500 ProMaster (Veh #3, #4)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 160000, notes: '2x 2023 RAM 2500 ProMaster (VINs 3C6LRVVG1PE562519, 3C6LRVVG3PE533006). Combined payoff $160,000; expected sale value $120,000; net equity ($40,000).', docFiles: [] },
   { id: 'd14', lender: 'Bank of Montreal - 2x GMC Savana (Veh #5, #6)', entity: 'NEF', debtType: 'Vehicle Loan', cleanup: true, originalAmount: null, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 140000, notes: '2x 2025 GMC Savana (VINs 1GTZ7HF78S1257927, 1GTZ7HF78S1257846). Combined payoff $140,000; expected sale value $118,000; net equity ($22,000).', docFiles: [] },
-  { id: 'd17', lender: 'Ally Bank - 2022 Hyundai Santa Cruz (Chef Eddie)', entity: 'Fish Island', debtType: 'Vehicle Loan', cleanup: false, active: true, originalAmount: 29504.82, originationDate: '2025-03-03', maturityDate: '2030-03-03', interestRate: 0.1084, termMonths: 60, monthlyPayment: 639.15, balance: 24635.90, notes: 'Chef Eddie (Head of Sushi) vehicle. 2022 Hyundai Santa Cruz, VIN 5NTJBDAE2NH030970. Ally Bank account #228-4410-72135.\n\nAPR 10.84%, 60-month term, $639.15 monthly P&I. Originated 03/03/2025; original balance $29,504.82.\n\nBalance: $24,635.90 as of 05/08/2026 (17% paid off, 47 of 60 payments remaining).\n\nStatus: PAST DUE — total payment due $659.15 by 06/02/2026 (regular $639.15 + ~$20 late charges). Finance charges: $986.53 YTD 2026, $2,453.50 in 2025.', docFiles: [] },
+  { id: 'd17', lender: 'Ally Bank - 2022 Hyundai Santa Cruz (Chef Eddie)', entity: 'Fish Island', debtType: 'Vehicle Loan', cleanup: false, active: true, originalAmount: 29504.82, originationDate: '2025-03-03', maturityDate: '2030-03-03', interestRate: 0.1084, termMonths: 60, monthlyPayment: 639.15, balance: 24635.90, notes: 'Chef Eddie (Head of Sushi) vehicle. 2022 Hyundai Santa Cruz, VIN 5NTJBDAE2NH030970. Ally Bank account #228-4410-72135.\n\nAPR 10.84%, 60-month term, $639.15 monthly P&I. Originated 03/03/2025; original balance $29,504.82.\n\nBalance: $24,635.90 as of 05/08/2026 (17% paid off, 47 of 60 payments remaining).\n\nStatus: PAST DUE — total payment due $659.15 by 06/02/2026 (regular $639.15 + ~$20 late charges). Finance charges: $986.53 YTD 2026, $2,453.50 in 2025.', docFiles: ['ally-bank-hyundai-santa-cruz-account-2026-05-08.png'] },
 ];
 const REMOVED_DEBT_IDS = new Set(['d4', 'd9', 'd15', 'd16']);
 
@@ -2533,6 +2533,13 @@ function DebtScheduleTab() {
           if (d.id === 'd10' && out.balance != null && out.balance < 100000) {
             out.balance = 499642.61;
           }
+          // Auto-link Newtek LOC + Ally Bank screenshot docs if not yet referenced
+          if (d.id === 'd10' && !out.docFiles.includes('newtek-loc-loan-advance-2026-04-15.jpg')) {
+            out.docFiles = ['newtek-loc-loan-advance-2026-04-15.jpg', ...out.docFiles];
+          }
+          if (d.id === 'd17' && !out.docFiles.includes('ally-bank-hyundai-santa-cruz-account-2026-05-08.png')) {
+            out.docFiles = ['ally-bank-hyundai-santa-cruz-account-2026-05-08.png', ...out.docFiles];
+          }
           // Auto-populate debtType using the seed lookup
           if (!out.debtType) out.debtType = DEBT_TYPE_BY_ID[d.id] || 'Other';
           return out;
@@ -2864,6 +2871,9 @@ function DocPreview({ files }) {
     );
   }
   const safeIdx = Math.min(idx, files.length - 1);
+  const currentFile = files[safeIdx];
+  const ext = currentFile.split('.').pop().toLowerCase();
+  const isImage = ['png','jpg','jpeg','gif','webp'].includes(ext);
   return (
     <>
       {files.length > 1 && (
@@ -2882,7 +2892,13 @@ function DocPreview({ files }) {
           ))}
         </div>
       )}
-      <iframe src={'/loan-docs/' + files[safeIdx]} className="flex-1 w-full" style={{border:'none'}} title={files[safeIdx]} />
+      {isImage ? (
+        <div className="flex-1 overflow-auto flex items-start justify-center p-4" style={{background:'#f7f9fc'}}>
+          <img src={'/loan-docs/' + currentFile} alt={currentFile} style={{maxWidth:'100%', height:'auto', display:'block'}} />
+        </div>
+      ) : (
+        <iframe src={'/loan-docs/' + currentFile} className="flex-1 w-full" style={{border:'none'}} title={currentFile} />
+      )}
     </>
   );
 }
