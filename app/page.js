@@ -2500,8 +2500,9 @@ function DebtScheduleTab() {
       const v = localStorage.getItem('debt_schedule');
       if (!v) return seed;
       const parsed = JSON.parse(v);
+      const existingIds = new Set(parsed.map(d => d.id));
       // Migrate legacy records — drop removed IDs, fill missing fields
-      return parsed
+      const migrated = parsed
         .filter(d => !REMOVED_DEBT_IDS.has(d.id))
         .map(d => {
           const out = { ...d, active: d.active === undefined ? true : d.active };
@@ -2531,6 +2532,10 @@ function DebtScheduleTab() {
           if (!out.debtType) out.debtType = DEBT_TYPE_BY_ID[d.id] || 'Other';
           return out;
         });
+      // Add any new seed entries that aren't in localStorage yet (so adding rows
+      // to DEBT_SEED takes effect without requiring users to clear localStorage)
+      const newFromSeed = seed.filter(d => !existingIds.has(d.id) && !REMOVED_DEBT_IDS.has(d.id));
+      return [...migrated, ...newFromSeed];
     } catch { return seed; }
   });
   const [selected, setSelected] = useState(null);
