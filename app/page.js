@@ -243,7 +243,7 @@ function CleanupTab() {
           <div className="text-xs mt-1" style={{color:'#8899aa'}}>{fmtNum(totals.asset.total)} total · {allRows.filter(r => r.type === 'asset').length} items</div>
         </div>
         <div className="rounded-xl p-4" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Capital to Complete</div>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Estimated Exposure</div>
           <div className="text-2xl font-bold" style={{color: totals.netNeeded > 0 ? GOLD_ACCENT : '#9dd4b5'}}>{fmtNum(totals.netNeeded)}</div>
           <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>{totals.netNeeded < 0 ? 'Surplus after offsets' : 'After offsetting assets'}</div>
         </div>
@@ -354,7 +354,7 @@ function CleanupTab() {
               <td colSpan={2}></td>
             </tr>
             <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
-              <td colSpan={5} className="px-3 py-2 font-bold">Capital to Complete</td>
+              <td colSpan={5} className="px-3 py-2 font-bold">Estimated Exposure</td>
               <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.netNeeded)}</td>
               <td colSpan={2}></td>
             </tr>
@@ -452,7 +452,7 @@ function CleanupTab() {
                 <div className="text-xs mt-1" style={{color:'#8899aa'}}>From c4 above</div>
               </div>
               <div className="rounded-lg p-3" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
-                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Capital to Complete</div>
+                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Estimated Exposure</div>
                 <div className="text-lg font-bold" style={{color: GOLD_ACCENT}}>{fmtNum((nefTotals.payoff > 0 ? nefTotals.payoff : nefTotals.balance) - expectedSale)}</div>
                 <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>After expected sale proceeds</div>
               </div>
