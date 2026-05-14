@@ -4202,7 +4202,7 @@ td.center { text-align: center; }
 
 /* ── MAIN DASHBOARD ── */
 export default function Dashboard() {
-  const [tab, setTab]             = useState('overview');
+  const [tab, setTab]             = useState('board');
   const [store, setStore]         = useState('cos cob');
   const [allSales, setAllSales]   = useState({});
   const [allPayroll, setAllPayroll] = useState({});
@@ -4320,7 +4320,7 @@ export default function Dashboard() {
 
       {/* TABS */}
       <div style={{background: NAVY_LIGHT, borderBottom:'1px solid rgba(255,255,255,0.08)'}} className="px-6 flex">
-        {[['overview','Overview'],['recruit','Job Opportunity'],['income','Income Calculator'],['hos','HoS Income'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['debt','Debt Schedule'],['cleanup','Cleanup'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
+        {[['recruit','Job Opportunity'],['income','Income Calculator'],['hos','HoS Income'],['compare','Model Comparison'],['board','Board Scenarios'],['modeler','Scenario Modeler'],['debt','Debt Schedule'],['cleanup','Cleanup'],['upcoming','Upcoming Payments'],['history','Payment History'],['roadmap','Roadmap']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`px-5 py-3 text-xs font-medium tracking-widest uppercase border-b-2 transition-all ${tab === id ? 'text-white border-amber-400' : 'border-transparent'}`}
             style={{color: tab === id ? 'white' : 'rgba(255,255,255,0.35)'}}>
@@ -4332,7 +4332,7 @@ export default function Dashboard() {
       <div className="flex" style={{minHeight:'calc(100vh - 116px)'}}>
 
         {/* SIDEBAR */}
-        {!['modeler','overview','recruit','income','hos','compare','board','debt','cleanup','roadmap'].includes(tab) && (
+        {!['modeler','recruit','income','hos','compare','board','debt','cleanup','roadmap'].includes(tab) && (
           <aside className="w-56 flex-shrink-0 border-r" style={{background:'white', borderColor:'#dde4ed'}}>
             <div className="p-4">
               <div className="text-xs font-semibold uppercase tracking-widest mb-3" style={{color:'#6b7a99'}}>
@@ -4371,175 +4371,6 @@ export default function Dashboard() {
 
         {/* MAIN */}
         <main className={`flex-1 p-6 overflow-y-auto ${tab === 'modeler' ? '' : ''}`}>
-
-          {/* OVERVIEW */}
-          {tab === 'overview' && (
-            <div className="max-w-4xl mx-auto">
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold" style={{color: NAVY}}>Sushi Concession Owner-Operator Program</h1>
-                <p className="text-sm mt-2" style={{color:'#6b7a99'}}>Internal reference &mdash; compensation model, key terms, and program goals</p>
-              </div>
-
-              {/* What We're Building */}
-              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
-                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>What We Are Building</h2>
-                <p className="text-sm leading-relaxed mb-4" style={{color:'#445566'}}>
-                  A platform where sushi concession operators run their own businesses within Fjord Fish Market locations.
-                  Each operator sets up their own LLC and receives a daily revenue share from their store&apos;s sales. From that payout,
-                  they cover their own COGS (ingredients, supplies) and payroll (any additional staff they hire). Fjord retains the
-                  remaining revenue after the operator&apos;s share is paid out.
-                </p>
-                <p className="text-sm leading-relaxed" style={{color:'#445566'}}>
-                  The goal is to create true owner-operators who are invested in growing their store&apos;s business, working
-                  50+ hours per week in-store, and thinking like entrepreneurs &mdash; not employees collecting a paycheck.
-                </p>
-              </div>
-
-              {/* Goals */}
-              <div className="rounded-xl p-6 mb-6" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
-                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>Program Goals</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    ['Livable Floor', 'Operators earn at least ~$70k/year at even the lowest-volume stores, making this a viable full-time career.'],
-                    ['Performance Ceiling ~$150k', 'Top-performing operators (Darien-level volume) can earn ~$150k, with continued upside beyond that.'],
-                    ['No Hard Cap', 'The growth accelerator ensures operators are always incentivized to push revenue higher, even at the top tier.'],
-                    ['Anti-Absentee Design', 'The tiered structure makes it economically unviable to simply hire cheap labor and step away. The math only works when the operator is in the store.'],
-                  ].map(([title, desc]) => (
-                    <div key={title} className="rounded-lg p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
-                      <div className="text-sm font-bold mb-1" style={{color: NAVY}}>{title}</div>
-                      <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>{desc}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* How It Works */}
-              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
-                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>How the Revenue Share Works</h2>
-                <div className="grid grid-cols-4 gap-4 mb-4">
-                  {[
-                    ['62%', 'First $300k'],
-                    ['55%', '$300k \u2013 $500k'],
-                    ['49%', '$500k \u2013 $700k'],
-                    ['43%', 'Above $700k'],
-                  ].map(([rate, range]) => (
-                    <div key={rate} className="rounded-lg p-4 text-center" style={{background:'#edf6fb', border:'1px solid #b3d9eb'}}>
-                      <div className="text-2xl font-bold" style={{color:'#1a6b8a'}}>{rate}</div>
-                      <div className="text-xs mt-1" style={{color:'#6b7a99'}}>{range}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="rounded-lg p-4 mb-4" style={{background:'#edfaf2', border:'1px solid #9dd4b5'}}>
-                  <div className="text-sm font-bold mb-2" style={{color:'#1a6b3a'}}>YoY Growth Accelerator (Tiered)</div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      ['+10%', '5\u201315% YoY growth'],
-                      ['+18%', '15\u201325% YoY growth'],
-                      ['+25%', '25%+ YoY growth'],
-                    ].map(([bonus, range]) => (
-                      <div key={bonus} className="rounded-lg p-3 text-center" style={{background:'white', border:'1px solid #9dd4b5'}}>
-                        <div className="text-lg font-bold" style={{color:'#1a6b3a'}}>{bonus}</div>
-                        <div className="text-xs" style={{color:'#6b7a99'}}>{range}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-xs mt-2" style={{color:'#6b7a99'}}>
-                    Bonus applied to incremental revenue within each growth band. The harder you grow, the more you earn per incremental dollar.
-                  </div>
-                </div>
-                <div className="text-xs leading-relaxed" style={{color:'#6b7a99'}}>
-                  <strong style={{color: NAVY}}>Example:</strong> A store doing $700k/year pays the operator: ($300k &times; 62%) + ($200k &times; 55%) + ($200k &times; 49%) = $186k + $110k + $98k = $394k.
-                  If that store grew 20% YoY, the operator earns growth bonuses: 10% on the 5&ndash;15% band ($700k &times; 10% &times; 10% = $7k) plus
-                  18% on the 15&ndash;20% band ($700k &times; 5% &times; 18% = $6.3k) = $13.3k bonus. Total payout: $407.3k.
-                </div>
-              </div>
-
-              {/* Money Flow */}
-              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
-                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>Daily Money Flow</h2>
-                <div className="flex items-center gap-2 flex-wrap text-sm">
-                  {[
-                    ['Customer pays', '#445566', '#f7f9fc'],
-                    ['POS captures sale', '#445566', '#f7f9fc'],
-                    ['CC settles next day', '#445566', '#f7f9fc'],
-                    ['21-day float', GOLD_ACCENT, '#fdf8ec'],
-                    ['Daily ACH to operator LLC', '#1a6b3a', '#edfaf2'],
-                  ].map(([step, color, bg], i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      {i > 0 && <span style={{color:'#ccd4e0'}}>&rarr;</span>}
-                      <span className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{color, background: bg, border:'1px solid #dde4ed'}}>
-                        {step}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="text-xs mt-3" style={{color:'#8899aa'}}>
-                  Payout is initiated via Modern Treasury on day 20, arrives in operator&apos;s LLC bank account on day 21.
-                </div>
-              </div>
-
-              {/* Key Terms */}
-              <div className="rounded-xl p-6 mb-6" style={{background:'white', border:'1px solid #dde4ed'}}>
-                <h2 className="text-lg font-bold mb-4" style={{color: NAVY}}>Key Terms</h2>
-                <div className="space-y-3">
-                  {[
-                    ['Owner-Operator', 'An independent business owner (LLC) who runs a sushi concession inside a Fjord location. Expected to work 50+ hours/week in-store.'],
-                    ['Revenue Share', 'The percentage of gross daily POS revenue paid to the operator. Uses a 4-tier structure (62% / 55% / 49% / 43%) with breakpoints at $300k, $500k, and $700k annualized revenue.'],
-                    ['Growth Accelerator', 'A tiered bonus on incremental revenue when monthly YoY growth exceeds 5%: 10% on 5-15% growth, 18% on 15-25% growth, 25% on 25%+ growth. Calculated by comparing each calendar month to the same month prior year.'],
-                    ['COGS (Cost of Goods Sold)', 'Ingredients, packaging, and supplies. Estimated at 20% of revenue. Paid by the operator from their revenue share.'],
-                    ['Payroll', 'Wages for any additional staff the operator hires, plus ~14% burden (FICA, SUTA/FUTA, workers comp). Paid by the operator from their share.'],
-                    ['21-Day Float', 'The lag between when a sale occurs and when the operator receives their payout. Fjord holds funds for 21 days after credit card settlement.'],
-                    ['Take-Home', 'What the operator keeps after paying COGS and payroll from their revenue share. This is their personal income.'],
-                    ['Fjord Net', 'Revenue retained by Fjord after paying out the operator\'s share. Fjord does NOT pay COGS or payroll — those are the operator\'s responsibility.'],
-                    ['Effective Rate', 'The blended percentage the operator actually receives, accounting for all tiers. Decreases as revenue grows due to the tiered structure.'],
-                    ['Modern Treasury', 'Payment operations platform used to automate daily ACH payouts to operator bank accounts.'],
-                    ['Store Hours', 'Mon-Sat 10am-7pm, Sun 10am-6pm (62 hours/week). Operator works 50+ hours across 6 days. High-volume stores require 2 people at all times (74 hrs/wk additional staff). Low-volume stores need coverage for the operator\'s day off (12 hrs/wk).'],
-                  ].map(([term, def]) => (
-                    <div key={term} className="flex gap-4 py-2" style={{borderBottom:'1px solid #eef1f6'}}>
-                      <div className="w-48 flex-shrink-0 text-sm font-semibold" style={{color: NAVY}}>{term}</div>
-                      <div className="text-sm" style={{color:'#6b7a99'}}>{def}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Locations */}
-              <div className="rounded-xl p-6" style={{background:'white', border:'1px solid #dde4ed'}}>
-                <h2 className="text-lg font-bold mb-3" style={{color: NAVY}}>Locations</h2>
-                <div className="grid grid-cols-3 gap-3">
-                  {STORES.map(s => {
-                    const sales = allSales[s] || [];
-                    const totalRev = sales.reduce((sum, r) => sum + r.gross, 0);
-                    const days = sales.length;
-                    const annualized = days > 0 ? (totalRev / days) * 365 : 0;
-                    const dailyAvg = days > 0 ? totalRev / days : 0;
-                    const needsStaff = annualized > 400000;
-                    return (
-                      <div key={s} className="rounded-lg p-4" style={{background:'#f7f9fc', border:'1px solid #dde4ed'}}>
-                        <div className="text-sm font-bold mb-2" style={{color: NAVY}}>{STORE_LABELS[s]}</div>
-                        <div className="space-y-1 text-xs" style={{color:'#6b7a99'}}>
-                          <div className="flex justify-between">
-                            <span>Annualized</span>
-                            <strong style={{color:'#445566'}}>{fmt(annualized)}</strong>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Daily Avg</span>
-                            <strong style={{color:'#445566'}}>{fmt(dailyAvg)}</strong>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Staffing</span>
-                            <strong style={{color: needsStaff ? '#3a4a8a' : '#1a6b3a'}}>
-                              {needsStaff ? '2-person crew' : 'Solo + 1 day coverage'}
-                            </strong>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* UPCOMING */}
           {tab === 'upcoming' && (
