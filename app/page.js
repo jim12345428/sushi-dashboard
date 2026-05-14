@@ -182,7 +182,7 @@ function CleanupTab() {
       <div className="mb-5 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold" style={{color: NAVY}}>Balance Sheet Cleanup</h1>
-          <p className="text-sm mt-1" style={{color:'#6b7a99'}}>Items that need to be paid off, written off, reclassified, or otherwise resolved on the balance sheet.</p>
+          <p className="text-sm mt-1" style={{color:'#6b7a99'}}>Balance sheet items being resolved through paydown, reclassification, or asset recovery — and the resources lined up against them.</p>
         </div>
         <button onClick={() => setShowAddForm(!showAddForm)} className="px-4 py-2 rounded-lg text-xs font-semibold text-white" style={{background: showAddForm ? '#6b7a99' : NAVY, border:'1px solid '+GOLD_ACCENT}}>
           {showAddForm ? 'Cancel' : '+ Add Cleanup Item'}
@@ -233,19 +233,19 @@ function CleanupTab() {
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #f5c6c6'}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Liabilities (Pending)</div>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Open Liabilities</div>
           <div className="text-2xl font-bold" style={{color:'#b5282a'}}>{fmtNum(totals.liab.pending)}</div>
           <div className="text-xs mt-1" style={{color:'#8899aa'}}>{fmtNum(totals.liab.total)} total · {allRows.filter(r => r.type === 'liability').length} items</div>
         </div>
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #9dd4b5'}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Assets to Liquidate (Pending)</div>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Offsetting Assets</div>
           <div className="text-2xl font-bold" style={{color:'#1a6b3a'}}>{fmtNum(totals.asset.pending)}</div>
           <div className="text-xs mt-1" style={{color:'#8899aa'}}>{fmtNum(totals.asset.total)} total · {allRows.filter(r => r.type === 'asset').length} items</div>
         </div>
         <div className="rounded-xl p-4" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
-          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Net Cash Needed</div>
+          <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Capital to Complete</div>
           <div className="text-2xl font-bold" style={{color: totals.netNeeded > 0 ? GOLD_ACCENT : '#9dd4b5'}}>{fmtNum(totals.netNeeded)}</div>
-          <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>Liabilities − Assets {totals.netNeeded < 0 ? '(surplus)' : ''}</div>
+          <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>{totals.netNeeded < 0 ? 'Surplus after offsets' : 'After offsetting assets'}</div>
         </div>
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #dde4ed'}}>
           <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>By Category</div>
@@ -344,17 +344,17 @@ function CleanupTab() {
               );
             })}
             <tr style={{background:'#fef2f2', borderTop:'2px solid #f5c6c6'}}>
-              <td colSpan={5} className="px-3 py-2 font-bold" style={{color:'#b5282a'}}>Total Liabilities (Pending)</td>
+              <td colSpan={5} className="px-3 py-2 font-bold" style={{color:'#b5282a'}}>Total Open Liabilities</td>
               <td className="px-3 py-2 text-right font-bold" style={{color:'#b5282a'}}>{fmtNum(totals.liab.pending)}</td>
               <td colSpan={2}></td>
             </tr>
             <tr style={{background:'#edfaf2'}}>
-              <td colSpan={5} className="px-3 py-2 font-bold" style={{color:'#1a6b3a'}}>Total Assets to Liquidate (Pending)</td>
+              <td colSpan={5} className="px-3 py-2 font-bold" style={{color:'#1a6b3a'}}>Total Offsetting Assets</td>
               <td className="px-3 py-2 text-right font-bold" style={{color:'#1a6b3a'}}>+{fmtNum(totals.asset.pending)}</td>
               <td colSpan={2}></td>
             </tr>
             <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
-              <td colSpan={5} className="px-3 py-2 font-bold">Net Cash Needed</td>
+              <td colSpan={5} className="px-3 py-2 font-bold">Capital to Complete</td>
               <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.netNeeded)}</td>
               <td colSpan={2}></td>
             </tr>
@@ -452,9 +452,9 @@ function CleanupTab() {
                 <div className="text-xs mt-1" style={{color:'#8899aa'}}>From c4 above</div>
               </div>
               <div className="rounded-lg p-3" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
-                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Net Cash Needed</div>
+                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Capital to Complete</div>
                 <div className="text-lg font-bold" style={{color: GOLD_ACCENT}}>{fmtNum((nefTotals.payoff > 0 ? nefTotals.payoff : nefTotals.balance) - expectedSale)}</div>
-                <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>Payoff − sale proceeds</div>
+                <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>After expected sale proceeds</div>
               </div>
             </div>
           </div>
