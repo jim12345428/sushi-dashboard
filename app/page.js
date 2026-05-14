@@ -30,7 +30,7 @@ const DEBT_TYPE_BY_ID = {
 };
 const DEBT_SEED = [
   { id: 'd2', lender: 'Acquisition Partners (Fish Acquisition Partners LLC)', entity: 'Fish Co Mgmt', debtType: 'Convertible Note', cleanup: false, active: false, originalAmount: 800000, originationDate: '2025-10-16', maturityDate: '2026-01-05', interestRate: null, termMonths: null, monthlyPayment: null, balance: 0, payoff: null, notes: 'FULLY CONVERTED to 16% Class B Membership Interest in Fish Company Management, LLC on 1/5/2026 per Note Conversion Agreement (DocuSign F45BF3E7-D5CA-40F6-A35F-9BA4CC7BF840). Acceptance of the Membership Interest constitutes "accord and satisfaction and payment in full" of the Notes — debt balance is $0.\n\nDebtor (Company) per agreement: FISH COMPANY MANAGEMENT, LLC (Delaware). Investor: Fish Acquisition Partners LLC (Maxwell Capital Group LLC, Managing Member — Alex Weiss). Company signatory: James Thistle, Manager. Governed by Delaware law.\n\nUnderlying $800k aggregate notes surrendered for cancellation:\n  • $300k Promissory Note dated 10/16/2025\n  • $150k Promissory Note dated 10/31/2025\n  • $150k Senior Secured Note dated 11/12/2025\n  • $200k Senior Secured Promissory Note dated 11/19/2025\n\nBookkeeping: any residual BS balance (prior $350K liability) must be reclassed — full $800K to equity (Class B MI in Fish Co Mgmt).', docFiles: ['acquisition-partners-note-conversion.pdf'] },
-  { id: 'd3', lender: 'American Express Line of Credit', entity: 'Fish Island', debtType: 'LOC', cleanup: true, originalAmount: 75000, originationDate: '', maturityDate: '', interestRate: 0.18, termMonths: null, monthlyPayment: 782.03, balance: 52135.00, payoff: null, notes: 'American Express Business Line of Credit. Account #303230. Borrowers: Fish Island LLC; D Thistle, James.\n\nStructured as multiple per-draw installment plans (each with its own factor-rate "Cost") rather than a unified APR — see plan numbers in transaction history. Auto-pay enabled.\n\nRate/monthly assumption for dashboard: 18.00% APR placeholder; monthly interest only ≈ $782.03 ($52,135 × 18% ÷ 12). The actual minimum payment per statement is $11,168.34 (mixes principal + per-plan factor-rate fees) — full schedule details in attached statement.\n\nLatest statement (04/15/2026, period 03/16–04/15):\n  • Previous balance $52,480.80\n  • Loans/debits +$9,800.00 (Direct Deposit Loan #3136582 on 04/13)\n  • Costs and fees +$1,810.00 (loan charges across plans #3136582, #3097673, #3058639, #2989755)\n  • Payments/credits −$11,955.80 (auto-draft on 04/05)\n  • New balance $52,135.00\n\nCurrent payment due: $11,168.34 by 05/06/2026. Contact 1-888-986-8263.', docFiles: ['amex-business-line-of-credit-statement-2026-04-15.pdf'] },
+  { id: 'd3', lender: 'American Express Line of Credit', entity: 'Fish Island', debtType: 'LOC', cleanup: false, originalAmount: 75000, originationDate: '', maturityDate: '', interestRate: 0.18, termMonths: null, monthlyPayment: 782.03, balance: 52135.00, payoff: null, notes: 'American Express Business Line of Credit. Account #303230. Borrowers: Fish Island LLC; D Thistle, James.\n\nStructured as multiple per-draw installment plans (each with its own factor-rate "Cost") rather than a unified APR — see plan numbers in transaction history. Auto-pay enabled.\n\nRate/monthly assumption for dashboard: 18.00% APR placeholder; monthly interest only ≈ $782.03 ($52,135 × 18% ÷ 12). The actual minimum payment per statement is $11,168.34 (mixes principal + per-plan factor-rate fees) — full schedule details in attached statement.\n\nLatest statement (04/15/2026, period 03/16–04/15):\n  • Previous balance $52,480.80\n  • Loans/debits +$9,800.00 (Direct Deposit Loan #3136582 on 04/13)\n  • Costs and fees +$1,810.00 (loan charges across plans #3136582, #3097673, #3058639, #2989755)\n  • Payments/credits −$11,955.80 (auto-draft on 04/05)\n  • New balance $52,135.00\n\nCurrent payment due: $11,168.34 by 05/06/2026. Contact 1-888-986-8263.', docFiles: ['amex-business-line-of-credit-statement-2026-04-15.pdf'] },
   { id: 'd5', lender: 'Newtek Bank SBA Loan #2742643', entity: 'Fish Island', debtType: 'SBA Loan', cleanup: false, originalAmount: 2250000, originationDate: '2025-04-10', maturityDate: '2035-04-02', interestRate: 0.0975, termMonths: 120, monthlyPayment: 29767, balance: 2129022.17, payoff: null, notes: 'SBA Loan #2742643 / SBA #7284969104. Borrowers: Fish Island LLC + 5th Ave Brooklyn LLC (joint & several). Guarantors: Northeast Fish Co (unlimited), Fish Co Mgmt (unlimited), Fish Acquisition Partners (unlimited), Sea Company (unlimited), James Thistle (unlimited), Dana Thistle (limited).\n\nRate 9.750%. Monthly P&I $29,767. Late fee $1,488.35 if paid after the 15th. 2025 interest paid: $158,226.86 (1098-C).\n\nCollateral includes mortgage on 9 Lillian Terrace, Darien CT 06820 (personal property). Newtek Bank depository required for ACH.\n\nServicer mailing: Newtek Bank N.A., Payment Processing, 200 S. Orange Ave, Suite 1175, Orlando, FL 32801. Customer service 212-356-9500 / ACH signup 1-800-749-8707.\n\nRecent payment activity:\n  • 04/15/2026 — $29,767.00 ($15,248.50 P / $14,518.50 I)\n  • 03/20/2026 — $28,278.65 ($9,611.67 P / $18,666.98 I) [short payment, late fee accrued]\n  • 02/18/2026 — $31,290.35 ($15,392.53 P / $15,862.82 I)\n\nPrincipal balance: $2,129,022.17 as of 04/27/2026 (per latest statement).', docFiles: ['newtek-sba-2742643-statement-2026-04-27.pdf', 'newtek-sba-2742643-statement-2026-03-24.pdf', 'newtek-sba-2742643-1098c-2025.pdf'] },
   { id: 'd6', lender: 'Notes Payable', entity: 'Fish Island', debtType: 'Promissory Note', cleanup: false, originalAmount: 100000, originationDate: '', maturityDate: '', interestRate: null, termMonths: null, monthlyPayment: null, balance: 100000, payoff: null, notes: '', docFiles: [] },
   { id: 'd7', lender: 'Oren Sauberman - $250K Note (Fish Co Mgmt)', entity: 'Fish Co Mgmt', debtType: 'Promissory Note', cleanup: false, originalAmount: 250000, originationDate: '2024-11-13', maturityDate: '2026-11-13', interestRate: 0.10, termMonths: null, monthlyPayment: 2083.33, balance: 250000, payoff: null, notes: 'Debtor: Fish Co Mgmt LLC. Lender: Oren Sauberman (34 Ranch Road, Woodbridge, CT 16525-1912). Subordinated to all Senior Indebtedness.\n\nSecured by: (i) guarantees from Fish Island LLC, Northeast Fish Co LLC, 5th Ave Brooklyn LLC w/ subordinated lien on their assets (Guaranty and Security Agreement); (ii) 1st priority pledge of Debtor\'s MIs in the three Guarantors (Debtor Pledge); (iii) 1st priority pledge of SeaCo\'s MIs in Debtor (SeaCo Pledge).\n\nInterest 10.00% per annum, payable quarterly in arrears on first day of each calendar quarter (30/360 basis). Actual cash payment is $6,250/quarter; the dashboard "Monthly Pmt" column shows the monthly-equivalent ($2,083.33) so the total row stays comparable across loans. Principal balloon at 11/13/2026 maturity.\n\nLate charge: 5% of delinquent payment if >10 days late. Default rate: greater of 15% or max permitted by law. Cross-default with $568K note. CT governing law.\n\nUse of proceeds: SBA repayment, legal fees of Jusmedico Law Group, consulting fees of Adam Fishman, working capital.\n\nExecuted via DocuSign 11/13/2024 (Envelope 40DB1CE2-2E54-47A5-B112-AD1E3656A1E2). Signatories: James Thistle (Member, Fish Co Mgmt) / Oren Sauberman.', docFiles: ['oren-sauberman-250k-note-2024-11-13.pdf'] },
@@ -98,7 +98,8 @@ function CleanupTab() {
   );
 
   const allRows = useMemo(() => {
-    const debtRows = cleanupDebts.map(d => ({
+    // Non-NEF cleanup debts render individually
+    const debtRows = cleanupDebts.filter(d => d.entity !== 'NEF').map(d => ({
       id: 'debt:' + d.id,
       label: d.lender,
       category: 'Debt',
@@ -110,13 +111,28 @@ function CleanupTab() {
       isDebt: true,
       sourceDebt: d,
     }));
+    // NEF vehicle loans roll up to a single summary row so the main
+    // table foots — granular detail lives in the NEF section below.
+    const nefActive = nefVehicleDebts.filter(d => d.active);
+    const nefSummaryRow = nefVehicleDebts.length > 0 ? [{
+      id: 'nef-vehicle-summary',
+      label: 'NEF Vehicle Loans (' + nefVehicleDebts.length + ' loan' + (nefVehicleDebts.length > 1 ? 's' : '') + ')',
+      category: 'Debt',
+      type: 'liability',
+      amount: nefActive.reduce((s, d) => s + ((d.payoff != null ? d.payoff : d.balance) || 0), 0),
+      entity: 'NEF',
+      resolved: nefActive.length === 0,
+      notes: 'Vehicles slated for sale to retire these loans. Detail in the NEF Vehicle Loans section below.',
+      isDebt: true,
+      isNefSummary: true,
+    }] : [];
     const itemRows = items.map(i => ({ ...i, type: i.type || 'liability', isDebt: false }));
     // Sort: liabilities first, then assets
-    return [...debtRows, ...itemRows].sort((a, b) => {
+    return [...debtRows, ...nefSummaryRow, ...itemRows].sort((a, b) => {
       if (a.type !== b.type) return a.type === 'liability' ? -1 : 1;
       return 0;
     });
-  }, [cleanupDebts, items]);
+  }, [cleanupDebts, nefVehicleDebts, items]);
 
   const totals = useMemo(() => {
     const liab = { total: 0, resolved: 0, pending: 0 };
@@ -274,14 +290,16 @@ function CleanupTab() {
             <th className="text-center px-2 py-2 font-semibold">Actions</th>
           </tr></thead>
           <tbody>
-            {allRows.filter(r => !(r.isDebt && r.sourceDebt && r.sourceDebt.entity === 'NEF')).map(r => {
+            {allRows.map(r => {
               const isEditing = editingId === r.id;
               const isAsset = r.type === 'asset';
               const amountColor = isAsset ? '#1a6b3a' : NAVY;
               return (
                 <tr key={r.id} style={{borderBottom:'1px solid #f0f4f8', textDecoration: r.resolved ? 'line-through' : 'none', opacity: r.resolved ? 0.6 : 1, background: isAsset ? '#f9fdf9' : 'white'}}>
                   <td className="px-2 py-2 text-center">
-                    <input type="checkbox" checked={r.resolved} onChange={() => toggleResolved(r)} title={r.resolved ? 'Mark unresolved' : 'Mark resolved'} />
+                    {r.isNefSummary
+                      ? <input type="checkbox" checked={r.resolved} disabled title="Resolve individually in the NEF Vehicle Loans section below" style={{opacity: 0.4}} />
+                      : <input type="checkbox" checked={r.resolved} onChange={() => toggleResolved(r)} title={r.resolved ? 'Mark unresolved' : 'Mark resolved'} />}
                   </td>
                   <td className="px-2 py-2 text-center">
                     {isEditing ? (
@@ -374,8 +392,6 @@ function CleanupTab() {
           balance: acc.balance + (d.balance || 0),
           payoff: acc.payoff + (d.payoff || 0),
         }), { original: 0, monthly: 0, balance: 0, payoff: 0 });
-        const sale = items.find(i => i.id === 'c4');
-        const expectedSale = sale && !sale.resolved ? sale.amount : 0;
         return (
           <div className="mt-8">
             <div className="mb-3">
@@ -440,23 +456,6 @@ function CleanupTab() {
                 </tbody>
               </table>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-              <div className="rounded-lg p-3" style={{background:'white', border:'1px solid #f5c6c6'}}>
-                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>Total Payoff</div>
-                <div className="text-lg font-bold" style={{color:'#b5282a'}}>{nefTotals.payoff > 0 ? fmtNum(nefTotals.payoff) : fmtNum(nefTotals.balance)}</div>
-                <div className="text-xs mt-1" style={{color:'#8899aa'}}>{nefTotals.payoff > 0 ? 'Per quoted payoff letters' : 'Estimated from current balance'}</div>
-              </div>
-              <div className="rounded-lg p-3" style={{background:'white', border:'1px solid #9dd4b5'}}>
-                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>Expected Sale Proceeds</div>
-                <div className="text-lg font-bold" style={{color:'#1a6b3a'}}>+{fmtNum(expectedSale)}</div>
-                <div className="text-xs mt-1" style={{color:'#8899aa'}}>From c4 above</div>
-              </div>
-              <div className="rounded-lg p-3" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
-                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Estimated Exposure</div>
-                <div className="text-lg font-bold" style={{color: GOLD_ACCENT}}>{fmtNum((nefTotals.payoff > 0 ? nefTotals.payoff : nefTotals.balance) - expectedSale)}</div>
-                <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>After expected sale proceeds</div>
-              </div>
-            </div>
           </div>
         );
       })()}
@@ -508,6 +507,10 @@ function DebtScheduleTab() {
           // Ameris (Balboa) ProMasters d13: keeping these vans — clear the
           // cleanup flag so they show on the Debt Schedule, not Cleanup tab.
           if (d.id === 'd13') {
+            out.cleanup = false;
+          }
+          // AmEx LOC d3: removed from cleanup track — ongoing operating LOC.
+          if (d.id === 'd3') {
             out.cleanup = false;
           }
           // Newtek SBA: sync to latest statement values when balance still looks
