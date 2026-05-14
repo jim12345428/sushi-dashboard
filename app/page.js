@@ -182,7 +182,7 @@ function CleanupTab() {
       {showAddForm && (
         <div className="rounded-xl p-4 mb-5" style={{background:'white', border:'2px solid '+GOLD_ACCENT}}>
           <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{color:'#6b7a99'}}>New Cleanup Item</div>
-          <div className="grid grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="col-span-2">
               <label className="text-xs block mb-1" style={{color:'#6b7a99'}}>Label</label>
               <input value={newItem.label} onChange={e => setNewItem({...newItem, label: e.target.value})} className="w-full text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}} />
@@ -220,7 +220,7 @@ function CleanupTab() {
       )}
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="rounded-xl p-4" style={{background:'white', border:'1px solid #f5c6c6'}}>
           <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'#8899aa'}}>Liabilities (Pending)</div>
           <div className="text-2xl font-bold" style={{color:'#b5282a'}}>{fmtNum(totals.liab.pending)}</div>
@@ -250,8 +250,8 @@ function CleanupTab() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
-        <table className="w-full text-xs">
+      <div className="rounded-xl overflow-x-auto" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <table className="w-full text-xs" style={{minWidth: 900}}>
           <thead><tr style={{background: NAVY, color:'white'}}>
             <th className="text-center px-2 py-2 font-semibold">Resolved</th>
             <th className="text-center px-2 py-2 font-semibold">Type</th>
@@ -658,7 +658,7 @@ function DebtScheduleTab() {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         <div className="rounded-xl p-4" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
           <div className="text-xs uppercase tracking-wide font-medium mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Total Debt</div>
           <div className="text-2xl font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(totals.grand)}</div>
@@ -673,7 +673,7 @@ function DebtScheduleTab() {
       </div>
 
       {/* Filters */}
-      <div className="rounded-xl p-3 mb-4 flex items-center gap-3" style={{background:'white', border:'1px solid #dde4ed'}}>
+      <div className="rounded-xl p-3 mb-4 flex flex-wrap items-center gap-3" style={{background:'white', border:'1px solid #dde4ed'}}>
         <span className="text-xs font-semibold" style={{color:'#6b7a99'}}>Status:</span>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="text-xs rounded border px-2 py-1" style={{borderColor:'#dde4ed', color: NAVY}}>
           <option value="Active">Active only</option>
@@ -700,8 +700,8 @@ function DebtScheduleTab() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl overflow-hidden" style={{border:'1px solid #dde4ed', background:'white'}}>
-        <table className="w-full text-xs">
+      <div className="rounded-xl overflow-x-auto" style={{border:'1px solid #dde4ed', background:'white'}}>
+        <table className="w-full text-xs" style={{minWidth: 1400}}>
           <thead><tr style={{background: NAVY, color:'white'}}>
             <th className="text-center px-2 py-2 font-semibold">Status</th>
             <th className="text-left px-3 py-2 font-semibold">Lender / Loan</th>
@@ -972,7 +972,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <main className="p-6 overflow-y-auto" style={{minHeight:'calc(100vh - 116px)'}}>
+      <main className="p-3 md:p-4 lg:p-6 overflow-y-auto" style={{minHeight:'calc(100vh - 116px)'}}>
         {tab === 'debt' && <DebtScheduleTab />}
         {tab === 'cleanup' && <CleanupTab />}
       </main>
