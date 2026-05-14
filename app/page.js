@@ -92,6 +92,10 @@ function CleanupTab() {
   }, []);
 
   const cleanupDebts = useMemo(() => debts.filter(d => d.cleanup), [debts]);
+  const nefVehicleDebts = useMemo(
+    () => cleanupDebts.filter(d => d.entity === 'NEF').sort((a, b) => (b.balance || 0) - (a.balance || 0)),
+    [cleanupDebts]
+  );
 
   const allRows = useMemo(() => {
     const debtRows = cleanupDebts.map(d => ({
@@ -163,7 +167,15 @@ function CleanupTab() {
     }
   }
 
+  function toggleDebtActive(d) {
+    const updated = debts.map(x => x.id === d.id ? { ...x, active: !x.active } : x);
+    setDebts(updated);
+    localStorage.setItem('debt_schedule', JSON.stringify(updated));
+  }
+
   const fmtNum = v => v == null ? '—' : '$' + Math.round(v).toLocaleString('en-US');
+  const fmtRate = r => r == null ? '—' : (r * 100).toFixed(2) + '%';
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : '—';
 
   return (
     <div>
@@ -262,7 +274,7 @@ function CleanupTab() {
             <th className="text-center px-2 py-2 font-semibold">Actions</th>
           </tr></thead>
           <tbody>
-            {allRows.map(r => {
+            {allRows.filter(r => !(r.isDebt && r.sourceDebt && r.sourceDebt.entity === 'NEF')).map(r => {
               const isEditing = editingId === r.id;
               const isAsset = r.type === 'asset';
               const amountColor = isAsset ? '#1a6b3a' : NAVY;
@@ -353,6 +365,101 @@ function CleanupTab() {
       <div className="text-xs mt-3" style={{color:'#8899aa'}}>
         Cleanup-flagged debts are pulled from the Debt Schedule. Mark a debt as inactive there to mark it resolved here. Litigation, payables, and other items can be added manually.
       </div>
+
+      {/* NEF Vehicle Loans (Cleanup) */}
+      {nefVehicleDebts.length > 0 && (() => {
+        const nefTotals = nefVehicleDebts.reduce((acc, d) => ({
+          original: acc.original + (d.originalAmount || 0),
+          monthly: acc.monthly + (d.monthlyPayment || 0),
+          balance: acc.balance + (d.balance || 0),
+          payoff: acc.payoff + (d.payoff || 0),
+        }), { original: 0, monthly: 0, balance: 0, payoff: 0 });
+        const sale = items.find(i => i.id === 'c4');
+        const expectedSale = sale && !sale.resolved ? sale.amount : 0;
+        return (
+          <div className="mt-8">
+            <div className="mb-3">
+              <h2 className="text-lg font-bold" style={{color: NAVY}}>NEF Vehicle Loans</h2>
+              <p className="text-xs mt-1" style={{color:'#6b7a99'}}>
+                Vehicles slated for sale to pay down debt. Payoff figures below come from quoted payoff letters or contract addenda — discount vs. running out the loan is shown. Expected sale proceeds tracked separately on c4 above.
+              </p>
+            </div>
+            <div className="rounded-xl overflow-x-auto" style={{border:'1px solid #dde4ed', background:'white'}}>
+              <table className="w-full text-xs" style={{minWidth: 1200}}>
+                <thead><tr style={{background: NAVY, color:'white'}}>
+                  <th className="text-center px-2 py-2 font-semibold">Resolved</th>
+                  <th className="text-left px-3 py-2 font-semibold">Lender / Loan</th>
+                  <th className="text-left px-3 py-2 font-semibold">Type</th>
+                  <th className="text-right px-3 py-2 font-semibold">Original</th>
+                  <th className="text-center px-3 py-2 font-semibold">Origin Date</th>
+                  <th className="text-center px-3 py-2 font-semibold">Maturity</th>
+                  <th className="text-center px-2 py-2 font-semibold">Rate</th>
+                  <th className="text-center px-2 py-2 font-semibold">Term</th>
+                  <th className="text-right px-3 py-2 font-semibold">Mthly Pmt</th>
+                  <th className="text-right px-3 py-2 font-semibold">Balance</th>
+                  <th className="text-right px-3 py-2 font-semibold">Payoff</th>
+                  <th className="text-center px-2 py-2 font-semibold">Doc</th>
+                </tr></thead>
+                <tbody>
+                  {nefVehicleDebts.map(d => {
+                    const inactive = !d.active;
+                    const txtColor = inactive ? '#a0aec0' : '#445566';
+                    const navyColor = inactive ? '#a0aec0' : NAVY;
+                    const dt = d.debtType || 'Other';
+                    const tc = debtTypeColor(dt);
+                    return (
+                      <tr key={d.id} style={{borderBottom:'1px solid #f0f4f8', textDecoration: inactive ? 'line-through' : 'none', opacity: inactive ? 0.7 : 1}}>
+                        <td className="px-2 py-2 text-center">
+                          <input type="checkbox" checked={inactive} onChange={() => toggleDebtActive(d)} title={inactive ? 'Mark unresolved (active again)' : 'Mark resolved (set inactive)'} />
+                        </td>
+                        <td className="px-3 py-2 font-semibold" style={{color: navyColor}}>{d.lender}</td>
+                        <td className="px-3 py-2">
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{background: tc.bg, color: tc.fg, border:'1px solid '+tc.border}}>{dt}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right" style={{color: txtColor}}>{fmtNum(d.originalAmount)}</td>
+                        <td className="px-3 py-2 text-center" style={{color: txtColor}}>{fmtDate(d.originationDate)}</td>
+                        <td className="px-3 py-2 text-center" style={{color: txtColor}}>{fmtDate(d.maturityDate)}</td>
+                        <td className="px-2 py-2 text-center" style={{color: txtColor}}>{fmtRate(d.interestRate)}</td>
+                        <td className="px-2 py-2 text-center" style={{color: txtColor}}>{d.termMonths || '—'}</td>
+                        <td className="px-3 py-2 text-right" style={{color: txtColor}}>{fmtNum(d.monthlyPayment)}</td>
+                        <td className="px-3 py-2 text-right font-bold" style={{color: navyColor}}>{fmtNum(d.balance)}</td>
+                        <td className="px-3 py-2 text-right" style={{color: txtColor}}>{d.payoff != null ? fmtNum(d.payoff) : '—'}</td>
+                        <td className="px-2 py-2 text-center">{d.docFiles?.length ? <span style={{color: GOLD_ACCENT}}>📄{d.docFiles.length > 1 ? ' ×' + d.docFiles.length : ''}</span> : <span style={{color:'#cbd5e0'}}>—</span>}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{background: NAVY, color:'white', borderTop:'2px solid '+GOLD_ACCENT}}>
+                    <td colSpan={3} className="px-3 py-2 font-bold">Total NEF Vehicle Debt</td>
+                    <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(nefTotals.original)}</td>
+                    <td colSpan={4}></td>
+                    <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(nefTotals.monthly)}</td>
+                    <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{fmtNum(nefTotals.balance)}</td>
+                    <td className="px-3 py-2 text-right font-bold" style={{color: GOLD_ACCENT}}>{nefTotals.payoff > 0 ? fmtNum(nefTotals.payoff) : '—'}</td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+              <div className="rounded-lg p-3" style={{background:'white', border:'1px solid #f5c6c6'}}>
+                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>Total Payoff</div>
+                <div className="text-lg font-bold" style={{color:'#b5282a'}}>{nefTotals.payoff > 0 ? fmtNum(nefTotals.payoff) : fmtNum(nefTotals.balance)}</div>
+                <div className="text-xs mt-1" style={{color:'#8899aa'}}>{nefTotals.payoff > 0 ? 'Per quoted payoff letters' : 'Estimated from current balance'}</div>
+              </div>
+              <div className="rounded-lg p-3" style={{background:'white', border:'1px solid #9dd4b5'}}>
+                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'#8899aa'}}>Expected Sale Proceeds</div>
+                <div className="text-lg font-bold" style={{color:'#1a6b3a'}}>+{fmtNum(expectedSale)}</div>
+                <div className="text-xs mt-1" style={{color:'#8899aa'}}>From c4 above</div>
+              </div>
+              <div className="rounded-lg p-3" style={{background: NAVY, border:`2px solid ${GOLD_ACCENT}`}}>
+                <div className="text-xs uppercase tracking-wide mb-1" style={{color:'rgba(255,255,255,0.5)'}}>Net Cash Needed</div>
+                <div className="text-lg font-bold" style={{color: GOLD_ACCENT}}>{fmtNum((nefTotals.payoff > 0 ? nefTotals.payoff : nefTotals.balance) - expectedSale)}</div>
+                <div className="text-xs mt-1" style={{color:'rgba(255,255,255,0.5)'}}>Payoff − sale proceeds</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -604,6 +711,8 @@ function DebtScheduleTab() {
 
   const filtered = useMemo(() => {
     return debts.filter(d => {
+      // NEF cleanup-flagged debts (vehicle loans being sold) live on the Cleanup tab
+      if (d.cleanup && d.entity === 'NEF') return false;
       if (filterEntity !== 'All' && d.entity !== filterEntity) return false;
       if (filterType !== 'All' && (d.debtType || 'Other') !== filterType) return false;
       if (showCleanupOnly && !d.cleanup) return false;
@@ -620,6 +729,7 @@ function DebtScheduleTab() {
     let grand = 0;
     debts.forEach(d => {
       if (!d.active) return;
+      if (d.cleanup && d.entity === 'NEF') return; // shown on Cleanup tab
       byEntity[d.entity] = (byEntity[d.entity] || 0) + (d.balance || 0);
       grand += d.balance || 0;
     });
